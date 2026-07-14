@@ -1,0 +1,17 @@
+# ArgoCD UI on the tailnet: https://argocd.<tailnet>.ts.net
+# Applied by hand during bootstrap (kubectl apply -f), before ArgoCD manages itself.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: argocd-server
+      port:
+        number: 80
+  tls:
+    - hosts:
+        - argocd

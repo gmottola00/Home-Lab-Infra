@@ -1,91 +1,130 @@
-# Homelab infra — Minisforum UM790
+# Homelab — k3s + GitOps sul Minisforum UM790
 
-Fondamenta condivise per le tue app (TickUp, Trip-AI) e, in futuro, per Jarvis.
-Il mini PC e' l'hub always-on; il PC con la 5080 e' un worker di inferenza on-demand.
+Repo **source-of-truth** del cluster: tutto ciò che gira sull'homelab è descritto
+qui e sincronizzato da ArgoCD. Obiettivo: infra comune per tutte le app
+(Trip-AI, poi TickUp, poi Jarvis) e palestra di architettura.
 
 ```
-Internet  ──✗ (niente porte aperte sul router)
-                        │
-iPhone ──[Tailscale]────┤
-                        ▼
-   ┌─────────────────────────────────────────┐
-   │  Minisforum UM790 (always-on)            │
-   │   Caddy ── tickup ── trip-ai   (Docker)  │
-   └──────────────┬──────────────────────────┘
-                  │ tailnet + Wake-on-LAN
-                  ▼
-   ┌─────────────────────────────────────────┐
-   │  PC fisso + RTX 5080  → Ollama (14B/7B)  │  (fase Jarvis)
-   └─────────────────────────────────────────┘
+                    Internet ──✗ (nessuna porta aperta sul router)
+                                      │
+iPhone ──[Tailscale]──────────────────┤
+                                      ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Minisforum UM790 · Ubuntu 24.04 · k3s single-node          │
+  │                                                            │
+  │  Tailscale Operator ── Ingress (cert LE *.ts.net)          │
+  │       ├─ https://argocd.<tailnet>.ts.net  → ArgoCD UI      │
+  │       └─ https://trip-ai.<tailnet>.ts.net → trip-ai-web    │
+  │                                ── /api/* → trip-ai-backend │
+  │  ArgoCD ── sync da questo repo (app-of-apps)               │
+  │  Sealed Secrets ── secrets cifrati committati in Git       │
+  └────────────────────────────────────────────────────────────┘
+        DB/Auth: Supabase (cloud) — nessun Postgres nel cluster (per ora)
+        Immagini: GHCR, buildate da GitHub Actions nei repo delle app
 ```
-Lo stato (DB) vive su **Supabase**: qui non gira Postgres.
+
+## Flusso di deploy (GitOps)
+
+1. Push su `main` nel repo dell'app (es. Trip-AI)
+2. GitHub Actions builda l'immagine → push su GHCR (`:latest` + `:<sha>`)
+3. Il workflow committa il nuovo tag in `apps/<app>/kustomization.yaml` **qui**
+4. ArgoCD vede il commit e rolla la nuova versione — nessun comando sul server
 
 ## Struttura
-```
-infra/
-  docker-compose.yml        caddy + tickup + trip-ai
-  caddy/Dockerfile          Caddy + plugin DNS Cloudflare
-  Caddyfile                 Opzione A (dominio) | Opzione B (solo tailnet)
-  .env.example              CLOUDFLARE_API_TOKEN (solo Opzione A)
-  secrets/*.env.example     secrets per app (Supabase, ecc.)
-  examples/Dockerfile.fastapi  da copiare in ogni app
-```
-Si assume che i repo `tickup/` e `trip-ai/` stiano **accanto** a `infra/`
-(`../tickup`, `../trip-ai`) e abbiano un Dockerfile (vedi esempio).
 
-## Setup — una volta sola
+```
+bootstrap/root-app.yaml     # UNICA cosa applicata a mano: l'app-of-apps
+bootstrap/apps/*.yaml       # le Application ArgoCD (una per app)
+platform/                   # componenti piattaforma: values helm + manifest
+  argocd/                   # values + ingress tailnet della UI
+  sealed-secrets/
+  tailscale-operator/
+apps/
+  trip-ai/                  # manifest kustomize dell'app (Deployment/Service/Ingress/secrets)
+legacy/                     # vecchio draft Caddy + docker-compose (riferimento storico)
+```
 
-### 1. Tailscale (la rete privata)
+## Bootstrap del cluster (una volta sola)
+
+Prerequisiti in admin console Tailscale: **MagicDNS** + **HTTPS Certificates**
+abilitati; ACL con `tag:k8s-operator`/`tag:k8s` e un **OAuth client** taggato
+`tag:k8s-operator` (scope: Devices Core + Auth Keys, write).
+
 ```bash
-# sul mini PC
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up
-tailscale ip -4          # annota l'IP 100.x.y.z del mini PC
-```
-- Installa **Tailscale** anche su iPhone (App Store) e sul PC-GPU. Stesso account.
-- In admin console attiva **MagicDNS** → ogni macchina ha un nome `*.ts.net`.
+# 1. k3s senza Traefik (l'ingress lo fa il Tailscale Operator)
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
+mkdir -p ~/.kube && sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config \
+  && sudo chown "$USER" ~/.kube/config
 
-### 2. Docker
+# 2. Helm + kubeseal CLI
+# (helm: https://helm.sh/docs/intro/install/ · kubeseal: release GitHub sealed-secrets)
+
+# 3. Componenti piattaforma
+helm repo add argo https://argoproj.github.io/argo-helm
+helm repo add sealed-secrets https://bitnami.github.io/sealed-secrets
+helm repo add tailscale https://pkgs.tailscale.com/helmcharts
+helm repo update
+
+helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace \
+  -f platform/argocd/values.yaml
+helm upgrade --install sealed-secrets sealed-secrets/sealed-secrets \
+  -n kube-system -f platform/sealed-secrets/values.yaml
+helm upgrade --install tailscale-operator tailscale/tailscale-operator \
+  -n tailscale --create-namespace -f platform/tailscale-operator/values.yaml \
+  --set-string oauth.clientId="$TS_CLIENT_ID" \
+  --set-string oauth.clientSecret="$TS_CLIENT_SECRET"
+
+# 4. Accesso ArgoCD → questo repo (privato): deploy key in sola lettura
+ssh-keygen -t ed25519 -f /tmp/argocd-deploy -N "" -C argocd@homelab
+# → aggiungi /tmp/argocd-deploy.pub come Deploy Key (read-only) del repo su GitHub
+kubectl -n argocd create secret generic repo-home-lab-infra \
+  --from-literal=type=git \
+  --from-literal=url=git@github.com:gmottola00/Home-Lab-Infra.git \
+  --from-file=sshPrivateKey=/tmp/argocd-deploy
+kubectl -n argocd label secret repo-home-lab-infra \
+  argocd.argoproj.io/secret-type=repository
+
+# 5. UI ArgoCD sulla tailnet + password iniziale
+kubectl apply -f platform/argocd/ingress.yaml
+kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath='{.data.password}' | base64 -d; echo
+
+# 6. Accendi tutto: da qui in poi comanda Git
+kubectl apply -f bootstrap/root-app.yaml
+```
+
+> Nota: ArgoCD, Sealed Secrets e l'operator sono installati via helm CLI al
+> bootstrap e non ancora auto-gestiti da ArgoCD (upgrade = `helm upgrade` con
+> gli stessi comandi). Adottarli nel loop GitOps è un miglioramento futuro.
+
+## Aggiungere una nuova app (il pattern)
+
+1. Nel repo dell'app: `Dockerfile` (+ eventuale `Dockerfile.web`) e workflow CI
+   che pushano su GHCR e bumpano il tag qui (copiare da Trip-AI)
+2. Qui: cartella `apps/<nome>/` con kustomize (Namespace, Deployment, Service,
+   Ingress `ingressClassName: tailscale`, secrets sigillati)
+3. Secrets: `kubeseal` (vedi sotto) — mai secret in chiaro su Git
+4. Qui: `bootstrap/apps/<nome>.yaml` (Application ArgoCD)
+5. Push → l'app-of-apps la raccoglie da sola
+
+### Sigillare un secret
+
 ```bash
-curl -fsSL https://get.docker.com | sh
+kubectl create secret generic <nome> -n <namespace> \
+  --from-literal=CHIAVE=valore --dry-run=client -o yaml \
+  | kubeseal --controller-namespace kube-system -o yaml \
+  > apps/<app>/sealed-secret.yaml
 ```
 
-### 3. Secrets
-```bash
-cp secrets/tickup.env.example  secrets/tickup.env
-cp secrets/trip-ai.env.example secrets/trip-ai.env
-# compila con URL/chiavi Supabase
-```
+Il file cifrato è committabile: solo il controller nel cluster può decifrarlo.
 
-### 4. Scegli TLS nel Caddyfile
-- **Opzione A (consigliata, hai un dominio):** scommenta il blocco A, metti i tuoi
-  sottodomini, crea su Cloudflare i record A verso l'IP 100.x del mini PC (proxy OFF),
-  `cp .env.example .env` e inserisci il token Cloudflare.
-- **Opzione B (nessun dominio):** lascia il blocco B, sostituisci `minipc.CAMBIAMI.ts.net`
-  col vero hostname MagicDNS. Aggiungi `ROOT_PATH=/tickup` e `/trip-ai` nei rispettivi .env.
+## Fasi future
 
-### 5. Su
-```bash
-docker compose up -d --build
-docker compose logs -f caddy      # controlla che i certificati salgano
-```
-
-### 6. App Flutter
-Punta la base URL all'hostname finale (es. `https://tickup.tuodominio.com` o
-`https://minipc.ts.net/tickup`). Con Tailscale attivo sull'iPhone funziona dentro
-e fuori casa senza cambiare nulla.
-
-## Wake-on-LAN (per la fase Jarvis)
-Serve ad accendere il PC-GPU dal mini PC solo quando serve inferenza.
-1. Nel BIOS del fisso: abilita **Wake-on-LAN / Power On by PCIe**.
-2. Sul mini PC: `sudo apt install wakeonlan` poi `wakeonlan AA:BB:CC:DD:EE:FF`
-   (MAC della scheda di rete del fisso).
-3. Jarvis chiamera' questo prima di girare un modello locale, e potra' sospendere
-   il fisso dopo N minuti di idle.
-
-## Prossimi passi
-- [ ] Infra su + due app raggiungibili da iPhone  ← siamo qui
-- [ ] Ollama sul PC-GPU, esposto sulla tailnet
-- [ ] Orchestratore Jarvis (routing locale/cloud) + MCP
-- [ ] Interfaccia iOS (Shortcut "Hey Siri, chiedi a Jarvis" + Open WebUI PWA)
-```
+- [x] Trip-AI online end-to-end (backend + PWA web) ← siamo qui
+- [ ] **TickUp**: Postgres + Redis per-app dentro il cluster (StatefulSet, senza
+      porte host), Celery worker/beat come Deployment separati, stesso pattern
+- [ ] **Observability**: kube-prometheus-stack + Grafana + Loki
+- [ ] **Jarvis**: PC fisso (RTX 5080) come k3s agent on-demand — Wake-on-LAN dal
+      mini PC, Ollama esposto sulla tailnet, poi orchestratore + MCP
+- [ ] Auto-gestione della piattaforma: ArgoCD/operator/sealed-secrets adottati
+      nel loop GitOps (app-of-apps anche per platform/)

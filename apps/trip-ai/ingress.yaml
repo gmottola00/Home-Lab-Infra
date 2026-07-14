@@ -1,0 +1,18 @@
+# Tailscale Operator ingress: creates a tailnet device named "trip-ai" with a
+# Let's Encrypt certificate → https://trip-ai.<tailnet>.ts.net
+# All traffic lands on the web Service; nginx serves the SPA and proxies /api.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: trip-ai
+  namespace: trip-ai
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: trip-ai-web
+      port:
+        number: 80
+  tls:
+    - hosts:
+        - trip-ai

@@ -1,0 +1,9 @@
+# Helm values for the tailscale-operator chart (repo: https://pkgs.tailscale.com/helmcharts)
+# The OAuth credentials are passed at install time, NOT stored here:
+#   helm upgrade --install tailscale-operator tailscale/tailscale-operator \
+#     -n tailscale --create-namespace \
+#     -f platform/tailscale-operator/values.yaml \
+#     --set-string oauth.clientId="$TS_CLIENT_ID" \
+#     --set-string oauth.clientSecret="$TS_CLIENT_SECRET"
+operatorConfig:
+  hostname: k8s-operator

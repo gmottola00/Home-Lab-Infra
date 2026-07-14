@@ -1,0 +1,8 @@
+# Helm values for the argo-cd chart (repo: https://argoproj.github.io/argo-helm)
+# Install/upgrade:
+#   helm upgrade --install argocd argo/argo-cd -n argocd --create-namespace \
+#     -f platform/argocd/values.yaml
+configs:
+  params:
+    # TLS terminates at the Tailscale ingress; ArgoCD serves plain HTTP inside.
+    server.insecure: true

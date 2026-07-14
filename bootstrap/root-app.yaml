@@ -1,0 +1,21 @@
+# App-of-apps: the only Application applied by hand (kubectl apply -f).
+# It syncs bootstrap/apps/, where every other Application lives — from that
+# moment on, adding an app to the cluster = adding a YAML there and pushing.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:gmottola00/Home-Lab-Infra.git
+    targetRevision: main
+    path: bootstrap/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

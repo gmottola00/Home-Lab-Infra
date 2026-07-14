@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trip-ai-backend
+  namespace: trip-ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trip-ai-backend
+  template:
+    metadata:
+      labels:
+        app: trip-ai-backend
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: backend
+          image: ghcr.io/gmottola00/trip-ai-backend:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: trip-ai-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trip-ai-backend
+  namespace: trip-ai
+spec:
+  selector:
+    app: trip-ai-backend
+  ports:
+    - port: 8000
+      targetPort: 8000

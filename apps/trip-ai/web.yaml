@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trip-ai-web
+  namespace: trip-ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trip-ai-web
+  template:
+    metadata:
+      labels:
+        app: trip-ai-web
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: web
+          image: ghcr.io/gmottola00/trip-ai-web:latest
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trip-ai-web
+  namespace: trip-ai
+spec:
+  selector:
+    app: trip-ai-web
+  ports:
+    - port: 80
+      targetPort: 80

@@ -1,0 +1,6 @@
+# Helm values for the sealed-secrets chart (repo: https://bitnami-labs.github.io/sealed-secrets)
+# Install/upgrade:
+#   helm upgrade --install sealed-secrets sealed-secrets/sealed-secrets \
+#     -n kube-system -f platform/sealed-secrets/values.yaml
+# kubeseal's default controller name is sealed-secrets-controller; keep them aligned.
+fullnameOverride: sealed-secrets-controller
