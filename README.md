@@ -120,9 +120,10 @@ Il file cifrato è committabile: solo il controller nel cluster può decifrarlo.
 
 ## Fasi future
 
-- [x] Trip-AI online end-to-end (backend + PWA web) ← siamo qui
-- [ ] **TickUp**: Postgres + Redis per-app dentro il cluster (StatefulSet, senza
-      porte host), Celery worker/beat come Deployment separati, stesso pattern
+- [x] Trip-AI online end-to-end (backend + PWA web)
+- [x] **TickUp**: stesso pattern di Trip-AI (Supabase cloud come DB, niente
+      Postgres/Redis in-cluster: Redis è inutilizzato nel codice e lo scheduling
+      è APScheduler in-process → backend a replica singola) ← siamo qui
 - [ ] **Observability**: kube-prometheus-stack + Grafana + Loki
 - [ ] **Jarvis**: PC fisso (RTX 5080) come k3s agent on-demand — Wake-on-LAN dal
       mini PC, Ollama esposto sulla tailnet, poi orchestratore + MCP

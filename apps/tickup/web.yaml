@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tickup-web
+  namespace: tickup
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tickup-web
+  template:
+    metadata:
+      labels:
+        app: tickup-web
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: web
+          image: ghcr.io/gmottola00/tickup-web:latest
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tickup-web
+  namespace: tickup
+spec:
+  selector:
+    app: tickup-web
+  ports:
+    - port: 80
+      targetPort: 80

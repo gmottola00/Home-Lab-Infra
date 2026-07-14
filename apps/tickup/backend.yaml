@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tickup-backend
+  namespace: tickup
+spec:
+  # Do not scale: the league scheduler (APScheduler) runs in-process and the
+  # rate limiter is in-memory — multiple replicas would double-fire jobs.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tickup-backend
+  template:
+    metadata:
+      labels:
+        app: tickup-backend
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: backend
+          image: ghcr.io/gmottola00/tickup-backend:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: tickup-secrets
+          # Alembic runs before uvicorn at container start: give it headroom.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tickup-backend
+  namespace: tickup
+spec:
+  selector:
+    app: tickup-backend
+  ports:
+    - port: 8000
+      targetPort: 8000

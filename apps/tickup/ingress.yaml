@@ -1,0 +1,19 @@
+# Tailscale Operator ingress: creates a tailnet device named "tickup" with a
+# Let's Encrypt certificate → https://tickup.<tailnet>.ts.net
+# All traffic lands on the web Service; nginx serves the SPA and proxies
+# /api (incl. WebSocket) and /unity to the backend.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tickup
+  namespace: tickup
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: tickup-web
+      port:
+        number: 80
+  tls:
+    - hosts:
+        - tickup
