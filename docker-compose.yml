@@ -1,0 +1,48 @@
+name: homelab
+
+# Hub always-on sul Minisforum UM790.
+# Nessun container Postgres: il DB e' Supabase (cloud). I backend si collegano
+# via DATABASE_URL + chiavi, passate come secrets (vedi ./secrets/*.env).
+
+services:
+  # --- Reverse proxy + TLS automatico -------------------------------------
+  caddy:
+    build: ./caddy            # build custom: Caddy + plugin DNS Cloudflare (per Opzione A)
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Serve solo per l'Opzione A (dominio + DNS challenge). Ignorato in Opzione B.
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data       # certificati: NON cancellare, evita rate-limit Let's Encrypt
+      - caddy_config:/config
+    networks: [edge]
+
+  # --- Le tue app (FastAPI/uvicorn su :8000 interno) ----------------------
+  tickup:
+    build:
+      context: ../tickup       # dove sta il repo TickUp (con il suo Dockerfile)
+    restart: unless-stopped
+    env_file: ./secrets/tickup.env
+    expose:
+      - "8000"                 # NON pubblicato sull'host: raggiungibile solo da Caddy
+    networks: [edge]
+
+  trip-ai:
+    build:
+      context: ../trip-ai
+    restart: unless-stopped
+    env_file: ./secrets/trip-ai.env
+    expose:
+      - "8000"
+    networks: [edge]
+
+networks:
+  edge:
+
+volumes:
+  caddy_data:
+  caddy_config:

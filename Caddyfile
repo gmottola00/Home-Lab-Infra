@@ -1,0 +1,57 @@
+# =============================================================================
+#  SCEGLI UNA delle due opzioni. Lascia commentata l'altra.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+#  OPZIONE A — Dominio tuo + sottodomini veri (consigliata)
+#  Come funziona:
+#   1. Su Cloudflare crei record A:  tickup.tuodominio.com  -> 100.x.y.z
+#      (l'IP Tailscale del mini PC, quello che inizia per 100.). Proxy DISATTIVATO
+#      (nuvoletta grigia). Cosi' il nome risolve solo dentro la tailnet.
+#   2. Caddy prende certificati Let's Encrypt via DNS-01 (non serve aprire porte).
+#   3. Dall'iPhone con Tailscale attivo: https://tickup.tuodominio.com ovunque.
+# -----------------------------------------------------------------------------
+# {
+#     email tua@email.com
+# }
+#
+# (tls_cf) {
+#     tls {
+#         dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+#     }
+# }
+#
+# tickup.tuodominio.com {
+#     import tls_cf
+#     reverse_proxy tickup:8000
+# }
+#
+# trip-ai.tuodominio.com {
+#     import tls_cf
+#     reverse_proxy trip-ai:8000
+# }
+
+
+# -----------------------------------------------------------------------------
+#  OPZIONE B — Nessun dominio: solo tailnet, routing per path
+#  Come funziona:
+#   - Usi l'hostname MagicDNS del mini PC (es. minipc.tuo-tailnet.ts.net).
+#   - Caddy usa la sua CA interna (tls internal): la prima volta l'iPhone
+#     chiedera' di fidarsi del certificato (una tantum).
+#   - Accedi a  https://minipc.ts.net/tickup/  e  /trip-ai/
+#   NOTA: le app FastAPI devono gestire il path prefix (root_path="/tickup").
+# -----------------------------------------------------------------------------
+minipc.CAMBIAMI.ts.net {
+    tls internal
+
+    handle_path /tickup/* {
+        reverse_proxy tickup:8000
+    }
+    handle_path /trip-ai/* {
+        reverse_proxy trip-ai:8000
+    }
+
+    handle {
+        respond "homelab up" 200
+    }
+}

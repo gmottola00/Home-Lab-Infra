@@ -1,0 +1,17 @@
+# Dockerfile di esempio da mettere nella root di TickUp e Trip-AI.
+# Assunzioni: dipendenze in requirements.txt, app in app/main.py -> variabile `app`.
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /code
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY . .
+
+EXPOSE 8000
+# root_path via env per supportare l'Opzione B (path routing). In Opzione A e' vuoto.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8000 ${ROOT_PATH:+--root-path $ROOT_PATH}"]
