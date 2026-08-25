@@ -15,4 +15,4 @@ images:
   - name: ghcr.io/gmottola00/tickup-backend
     newTag: 6cc5fe10020a225f55d7af5a7bd5963fd3a856ac
   - name: ghcr.io/gmottola00/tickup-web
-    newTag: 4f5e7497d3de6f3548af142ddc546787d2d9dc6d
+    newTag: 6cc5fe10020a225f55d7af5a7bd5963fd3a856ac
