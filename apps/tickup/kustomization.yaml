@@ -13,6 +13,6 @@ resources:
 # main; ArgoCD picks up the commit and rolls out. Do not edit newTag by hand.
 images:
   - name: ghcr.io/gmottola00/tickup-backend
-    newTag: 6cc5fe10020a225f55d7af5a7bd5963fd3a856ac
+    newTag: e259bef203ffbd3279d90846cbdc95d5c5043068
   - name: ghcr.io/gmottola00/tickup-web
     newTag: e259bef203ffbd3279d90846cbdc95d5c5043068
