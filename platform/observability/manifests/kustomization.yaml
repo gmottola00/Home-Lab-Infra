@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Ciò che non sta nei values helm: il namespace e la password di Grafana.
+# Sincronizzato prima degli altri (sync-wave -1, vedi bootstrap/apps/observability.yaml)
+# così il secret esiste già quando il pod Grafana parte.
+resources:
+  - namespace.yaml
+  # Cifrato con kubeseal — committabile: solo il controller nel cluster lo decifra.
+  # Rigenerabile con `make seal-grafana`.
+  - grafana-admin-sealed-secret.yaml

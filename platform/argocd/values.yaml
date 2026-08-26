@@ -6,3 +6,43 @@ configs:
   params:
     # TLS terminates at the Tailscale ingress; ArgoCD serves plain HTTP inside.
     server.insecure: true
+
+  cm:
+    # Account per la dashboard Jarvis. apiKey e basta: nessuna password, nessun
+    # login via UI, solo token revocabili.
+    accounts.jarvis: apiKey
+
+  rbac:
+    # Jarvis contro ArgoCD fa solo GET (list/get/managed-resources/refresh),
+    # quindi 'applications, get' copre tutto. Niente sync, niente delete.
+    policy.csv: |
+      p, role:jarvis, applications, get, */*, allow
+      g, jarvis, role:jarvis
+    # Chi non ha una policy esplicita non legge niente.
+    policy.default: ''
+
+# Metriche verso Prometheus (sync/health delle Application, coda del repo-server).
+# I Service metrics sono spenti di default nel chart.
+#
+# ATTENZIONE all'ordine: i ServiceMonitor sono CRD del Prometheus Operator, quindi
+# questo `helm upgrade` va fatto DOPO il primo sync di kube-prometheus-stack,
+# altrimenti fallisce con "no matches for kind ServiceMonitor".
+#
+# Funziona cross-namespace (ArgoCD sta in argocd, Prometheus in monitoring) grazie ai
+# serviceMonitorSelectorNilUsesHelmValues: false in
+# platform/observability/kube-prometheus-stack-values.yaml.
+controller:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+server:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+repoServer:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true

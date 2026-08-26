@@ -1,0 +1,74 @@
+# Helm values per il chart loki (repo: grafana). Sincronizzato da ArgoCD.
+#
+# Modalità SingleBinary su filesystem: su un nodo solo la modalità distribuita
+# (read/write/backend + memcached + gateway + MinIO) sarebbe solo overhead. Tutto ciò
+# che il chart accende di default e qui non serve va spento esplicitamente in fondo.
+
+deploymentMode: SingleBinary
+
+loki:
+  # Nessun multi-tenancy: il perimetro è la tailnet, non Loki.
+  auth_enabled: false
+
+  commonConfig:
+    replication_factor: 1
+
+  storage:
+    type: filesystem
+
+  # Obbligatorio dalla 3.x: senza schemaConfig esplicito il chart usa uno schema
+  # legacy. tsdb + v13 è lo schema corrente.
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+  limits_config:
+    retention_period: 30d
+    # I log di un pod appena riavviato possono arrivare con timestamp arretrati:
+    # scartarli vanificherebbe proprio il caso d'uso (leggere i log di un crash).
+    reject_old_samples: false
+
+  # La retention sopra è solo una policy: senza compactor nessuno cancella davvero.
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 30Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1536Mi
+
+# --- componenti non usati in SingleBinary ------------------------------------
+read:    { replicas: 0 }
+write:   { replicas: 0 }
+backend: { replicas: 0 }
+
+# Le cache sono pod memcached separati: su questa scala di log non servono.
+chunksCache:  { enabled: false }
+resultsCache: { enabled: false }
+
+# Canary, gateway nginx e i pod di test del chart: rumore in più da mantenere.
+lokiCanary: { enabled: false }
+gateway:    { enabled: false }
+minio:      { enabled: false }
+test:       { enabled: false }
+
+# Loki espone già le proprie metriche: con kube-prometheus-stack installato, questo
+# ServiceMonitor le porta dentro Prometheus (ingest rate, chunk, errori).
+monitoring:
+  serviceMonitor:
+    enabled: true

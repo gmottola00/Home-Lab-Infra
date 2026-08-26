@@ -1,0 +1,88 @@
+# Helm values per il chart alloy (repo: grafana). Sincronizzato da ArgoCD.
+#
+# Alloy è l'agente che raccoglie i log dei pod e li spedisce a Loki. Promtail, che
+# faceva questo lavoro fino a ieri, è EOL da marzo 2026.
+
+# Il chart installerebbe la CRD PodLogs: qui la pipeline è descritta interamente nel
+# config sotto, la CRD resterebbe inutilizzata.
+crds:
+  create: false
+
+controller:
+  # DELIBERATAMENTE un Deployment a replica singola, non il DaemonSet di default:
+  # loki.source.kubernetes legge i log dall'API server, non dal filesystem del nodo,
+  # quindi ogni replica vedrebbe TUTTI i pod del cluster. Con un DaemonSet, il giorno
+  # in cui Jarvis entra come secondo nodo ogni riga di log arriverebbe a Loki due
+  # volte. Un'istanza sola copre l'intero cluster, e senza hostPath né privilegi.
+  type: deployment
+  replicas: 1
+
+alloy:
+  # Nessun componente sperimentale in uso: loki.source.kubernetes è GA.
+  stabilityLevel: generally-available
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+  configMap:
+    create: true
+    content: |-
+      // Un target per ogni container di ogni pod del cluster.
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // I meta-label __meta_kubernetes_* servono a loki.source.kubernetes per sapere
+      // cosa tailare, ma vengono scartati prima della spedizione perché iniziano per
+      // "__": qui li ricopiamo nei label di stream con cui si interroga Loki.
+      // Tenerli pochi è voluto: ogni label è una stream separata in Loki.
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+        // Le app di questo repo etichettano i pod con app: <nome>-<comp>
+        // (vedi apps/*/backend.yaml): è il label con cui si cercano davvero i log.
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "app"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.write.default.receiver]
+      }
+
+      loki.write "default" {
+        endpoint {
+          url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+# Le regole RBAC di default del chart includono già pods e pods/log in sola lettura:
+# è esattamente ciò che serve a loki.source.kubernetes.
+rbac:
+  create: true
+
+# Metriche di Alloy stesso dentro Prometheus (righe spedite, errori di write verso Loki).
+serviceMonitor:
+  enabled: true

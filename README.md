@@ -14,10 +14,13 @@ iPhone ──[Tailscale]──────────────────�
   │                                                            │
   │  Tailscale Operator ── Ingress (cert LE *.ts.net)          │
   │       ├─ https://argocd.<tailnet>.ts.net  → ArgoCD UI      │
+  │       ├─ https://grafana.<tailnet>.ts.net → Grafana        │
+  │       ├─ https://tickup.<tailnet>.ts.net  → tickup-web     │
   │       └─ https://trip-ai.<tailnet>.ts.net → trip-ai-web    │
   │                                ── /api/* → trip-ai-backend │
   │  ArgoCD ── sync da questo repo (app-of-apps)               │
   │  Sealed Secrets ── secrets cifrati committati in Git       │
+  │  Prometheus + Loki ── metriche e log di ogni pod → Grafana │
   └────────────────────────────────────────────────────────────┘
         DB/Auth: Supabase (cloud) — nessun Postgres nel cluster (per ora)
         Immagini: GHCR, buildate da GitHub Actions nei repo delle app
@@ -39,10 +42,34 @@ platform/                   # componenti piattaforma: values helm + manifest
   argocd/                   # values + ingress tailnet della UI
   sealed-secrets/
   tailscale-operator/
+  observability/            # values helm dello stack + manifest (ns, password Grafana)
 apps/
   trip-ai/                  # manifest kustomize dell'app (Deployment/Service/Ingress/secrets)
 legacy/                     # vecchio draft Caddy + docker-compose (riferimento storico)
 ```
+
+## Comandi quotidiani
+
+Il `Makefile` raccoglie i comandi ricorrenti (`make` da solo elenca tutto).
+Convenzione: `APP` è il nome della cartella in `apps/` — che è anche il
+namespace — e `COMP` è `backend` o `web`.
+
+```bash
+make ps                          # pod di tutte le app + piattaforma
+make status                      # nodi, Application ArgoCD, ingress tailnet
+make logs APP=tickup COMP=web    # log in follow
+make logs-prev APP=tickup        # log del container morto (CrashLoopBackOff)
+make sh APP=trip-ai              # shell nel pod
+make restart APP=tickup          # rollout restart + attesa
+make diff APP=tickup             # cosa c'è in Git vs cosa gira davvero
+make validate                    # dry-run server-side di tutte le app
+make seal APP=tickup ENV_FILE=~/tickup.env
+make obs                         # pod e volumi dello stack di observability
+make obs-pass                    # password admin di Grafana
+```
+
+Il Makefile non fa deploy: quello resta di ArgoCD (`make argo-refresh` al
+massimo evita di aspettare il polling).
 
 ## Bootstrap del cluster (una volta sola)
 
@@ -95,7 +122,8 @@ kubectl apply -f bootstrap/root-app.yaml
 
 > Nota: ArgoCD, Sealed Secrets e l'operator sono installati via helm CLI al
 > bootstrap e non ancora auto-gestiti da ArgoCD (upgrade = `helm upgrade` con
-> gli stessi comandi). Adottarli nel loop GitOps è un miglioramento futuro.
+> gli stessi comandi). Lo stack di observability invece è già in GitOps, con
+> Application multi-source: è il pattern da estendere anche a questi tre.
 
 ## Aggiungere una nuova app (il pattern)
 
@@ -118,13 +146,67 @@ kubectl create secret generic <nome> -n <namespace> \
 
 Il file cifrato è committabile: solo il controller nel cluster può decifrarlo.
 
+## Observability
+
+Metriche e log di tutto il cluster, su `https://grafana.<tailnet>.ts.net`
+(`make obs-pass` per la password admin).
+
+| Pezzo | Cosa fa |
+|---|---|
+| kube-prometheus-stack | Prometheus + Alertmanager + Grafana + kube-state-metrics + node-exporter |
+| Loki | archivio dei log, retention 30 giorni |
+| Alloy | legge i log dei pod e li spedisce a Loki (sostituisce Promtail, EOL da marzo 2026) |
+
+Cosa risolve, in concreto: `make logs-prev` mostra i log di **un solo** crash e li
+perde al riavvio successivo. In Loki i log del pod distrutto restano, e si cercano
+per namespace/pod/container/`app`:
+
+```logql
+{namespace="tickup"}                          # tutto il namespace
+{app="tickup-backend"} |= "ERROR"             # solo gli errori del backend
+```
+
+Le tre Application (`kube-prometheus-stack`, `loki`, `alloy`) sono le prime
+**multi-source**: la prima source è il chart Helm upstream, la seconda è questo repo
+referenziato come `$values` dai `valueFiles`. Il chart resta upstream, la sua
+configurazione resta versionata qui — è il pattern con cui adottare in futuro anche
+ArgoCD, l'operator e sealed-secrets nel loop GitOps.
+
+Tre scelte che sembrano strane e non lo sono:
+
+- **Il control-plane k3s non viene raccolto.** Scheduler, controller-manager e proxy
+  girano dentro l'unico processo k3s e bindano su `127.0.0.1`; etcd non esiste
+  (sqlite embedded). Esporli richiederebbe flag in `/etc/rancher/k3s/config.yaml`
+  sull'host, cioè configurazione fuori da Git, e su un single-node direbbero poco.
+  I relativi scrape job **e le loro alert** sono spenti nei values: un target down
+  per sempre insegna solo a ignorare le notifiche.
+- **Alertmanager è installato ma muto.** Nessun receiver esterno finché non sappiamo
+  quali alert sono davvero utili; per ora si guardano dalla UI.
+- **Alloy è un Deployment a replica singola, non un DaemonSet.** Legge i log
+  dall'API server, non dal filesystem del nodo: un DaemonSet farebbe vedere a ogni
+  replica tutti i pod del cluster e, il giorno in cui Jarvis entra come secondo
+  nodo, ogni riga arriverebbe a Loki due volte.
+
+Se una metrica manca, si parte sempre da `make obs-targets` (target di scrape down).
+
+### Metriche di ArgoCD
+
+I Service `metrics` di ArgoCD sono spenti di default nel chart. Sono abilitati in
+`platform/argocd/values.yaml`, ma vanno applicati con un `helm upgrade` **dopo** il
+primo sync di kube-prometheus-stack — i ServiceMonitor sono CRD del Prometheus
+Operator e prima non esistono:
+
+```bash
+helm upgrade --install argocd argo/argo-cd -n argocd -f platform/argocd/values.yaml
+```
+
 ## Fasi future
 
 - [x] Trip-AI online end-to-end (backend + PWA web)
 - [x] **TickUp**: stesso pattern di Trip-AI (Supabase cloud come DB, niente
       Postgres/Redis in-cluster: Redis è inutilizzato nel codice e lo scheduling
-      è APScheduler in-process → backend a replica singola) ← siamo qui
-- [ ] **Observability**: kube-prometheus-stack + Grafana + Loki
+      è APScheduler in-process → backend a replica singola)
+- [x] **Observability**: kube-prometheus-stack + Grafana + Loki ← siamo qui
 - [ ] **Jarvis**: PC fisso (RTX 5080) come k3s agent on-demand — Wake-on-LAN dal
       mini PC, Ollama esposto sulla tailnet, poi orchestratore + MCP
 - [ ] Auto-gestione della piattaforma: ArgoCD/operator/sealed-secrets adottati

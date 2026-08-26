@@ -1,0 +1,129 @@
+# Observability stack: metriche (Prometheus) e log (Loki) di tutto il cluster,
+# consultabili da https://grafana.<tailnet>.ts.net
+#
+# Quattro Application in un file solo perché sono un unico stack: separarle in quattro
+# file darebbe l'idea che siano indipendenti, mentre l'ordine di sync conta.
+#
+# Sono le prime Application "multi-source": la prima source è il chart Helm upstream,
+# la seconda è QUESTO repo, referenziata come $values dai valueFiles. Così il chart
+# resta upstream e la sua configurazione resta versionata qui — è il pattern con cui
+# in futuro adottare anche argocd/sealed-secrets/tailscale-operator nel loop GitOps.
+#
+# Perché ServerSideApply: le CRD del Prometheus Operator superano il limite di 262144
+# byte dell'annotation last-applied-configuration, e con il client-side apply il sync
+# fallisce. Tenuto su tutte e quattro per uniformità.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability-base
+  namespace: argocd
+  annotations:
+    # Prima di tutto il resto: crea il namespace e la password di Grafana.
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:gmottola00/Home-Lab-Infra.git
+    targetRevision: main
+    path: platform/observability/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 88.5.4
+      helm:
+        valueFiles:
+          - $values/platform/observability/kube-prometheus-stack-values.yaml
+    # Source di soli valori: nessun `path`, non genera manifest.
+    - repoURL: git@github.com:gmottola00/Home-Lab-Infra.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+  annotations:
+    # Dopo lo stack: il ServiceMonitor di Loki ha bisogno delle CRD del Prometheus Operator.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: loki
+      targetRevision: 6.55.0
+      helm:
+        valueFiles:
+          - $values/platform/observability/loki-values.yaml
+    - repoURL: git@github.com:gmottola00/Home-Lab-Infra.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alloy
+  namespace: argocd
+  annotations:
+    # Per ultimo: senza Loki su, avrebbe solo log da buttare.
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: alloy
+      targetRevision: 1.12.0
+      helm:
+        valueFiles:
+          - $values/platform/observability/alloy-values.yaml
+    - repoURL: git@github.com:gmottola00/Home-Lab-Infra.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

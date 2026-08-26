@@ -1,0 +1,118 @@
+# Helm values per il chart kube-prometheus-stack (repo: prometheus-community).
+# Non si installa a mano: lo sincronizza ArgoCD — vedi bootstrap/apps/observability.yaml.
+#
+# Cosa entra nel cluster: Prometheus Operator, Prometheus, Alertmanager, Grafana,
+# kube-state-metrics, node-exporter.
+
+# --- k3s ---------------------------------------------------------------------
+# Su k3s scheduler, controller-manager e proxy girano dentro l'unico processo k3s e
+# bindano su 127.0.0.1; etcd non c'è (sqlite embedded). I job di scrape di default
+# resterebbero down per sempre, con le relative alert sempre accese. Per esporli
+# servirebbero flag in /etc/rancher/k3s/config.yaml sull'host — fuori da Git, e su un
+# single-node dicono poco. Se un giorno servissero, si riaccendono qui.
+kubeScheduler:         { enabled: false }
+kubeControllerManager: { enabled: false }
+kubeEtcd:              { enabled: false }
+kubeProxy:             { enabled: false }
+
+defaultRules:
+  rules:
+    # Spegniamo anche le regole di allarme dei componenti sopra: senza target, le loro
+    # alert scattano a vuoto e insegnano a ignorare le notifiche.
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeControllerManager: false
+    etcd: false
+    kubeProxy: false
+
+# --- Prometheus --------------------------------------------------------------
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    # Tetto duro sotto la dimensione della PVC: Prometheus scarta i blocchi vecchi da
+    # solo invece di riempire il volume e andare in crash loop.
+    retentionSize: 18GB
+
+    # Di default il chart fa raccogliere a Prometheus solo i ServiceMonitor con la label
+    # della propria release helm. Con questi a false raccoglie quelli di TUTTI i
+    # namespace: è ciò che permette di scoprire ArgoCD (ns argocd) e le app che
+    # esporranno /metrics in futuro, senza toccare questi values.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    scrapeConfigSelectorNilUsesHelmValues: false
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        memory: 3Gi
+
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 25Gi
+
+# --- Alertmanager ------------------------------------------------------------
+# Installato ma muto: nessun receiver esterno finché non sappiamo quali alert sono
+# davvero utili. Le alert restano visibili in Grafana e nella UI di Alertmanager.
+# Il volume serve solo a non perdere i silenzi ai restart.
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 2Gi
+
+# --- Grafana -----------------------------------------------------------------
+grafana:
+  # Password in un SealedSecret (platform/observability/manifests/), mai nei values.
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 5Gi
+
+  grafana.ini:
+    server:
+      # Il TLS termina sull'ingress Tailscale e Grafana parla HTTP: senza root_url
+      # esplicito genera redirect e link assoluti sbagliati (http://localhost:3000).
+      root_url: https://grafana.tail682dc3.ts.net
+
+  # Stesso pattern di apps/*/ingress.yaml: device tailnet "grafana" con cert Let's
+  # Encrypt → https://grafana.tail682dc3.ts.net
+  ingress:
+    enabled: true
+    ingressClassName: tailscale
+    tls:
+      - hosts: [grafana]
+
+  # Il datasource Prometheus lo cabla il chart da solo; Loki va aggiunto qui.
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      url: http://loki.monitoring.svc.cluster.local:3100
+      jsonData:
+        maxLines: 1000
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
