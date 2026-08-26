@@ -15,4 +15,4 @@ images:
   - name: ghcr.io/gmottola00/trip-ai-backend
     newTag: 406356bf006ce32bc887139dd6ddab1b2878a76a
   - name: ghcr.io/gmottola00/trip-ai-web
-    newTag: 438f84423e503baa36539934518e08d270dfb7cc
+    newTag: 406356bf006ce32bc887139dd6ddab1b2878a76a
