@@ -13,6 +13,6 @@ resources:
 # main; ArgoCD picks up the commit and rolls out. Do not edit newTag by hand.
 images:
   - name: ghcr.io/gmottola00/trip-ai-backend
-    newTag: ada2faf9b9ed076927b2c26c0a6d54a6826f3ecd
+    newTag: 406356bf006ce32bc887139dd6ddab1b2878a76a
   - name: ghcr.io/gmottola00/trip-ai-web
     newTag: 438f84423e503baa36539934518e08d270dfb7cc
