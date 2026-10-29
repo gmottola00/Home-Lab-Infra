@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - backend.yaml
+  - web.yaml
+  - ingress.yaml
+  # Encrypted with kubeseal — safe to commit; only the in-cluster controller
+  # can decrypt them.
+  - sealed-secret.yaml
+  - ghcr-pull-secret.yaml
+
+# Configurazione non segreta. Il generator aggiunge al nome un hash del
+# contenuto (jarvis-config-<hash>) e aggiorna i riferimenti nel Deployment:
+# un valore cambiato produce un pod template diverso, quindi un rollout. Una
+# ConfigMap scritta a mano invece cambierebbe senza riavviare nessuno.
+configMapGenerator:
+  - name: jarvis-config
+    namespace: jarvis
+    literals:
+      # ArgoCD gira con server.insecure: dall'interno si parla HTTP al Service,
+      # senza passare dalla tailnet.
+      - JARVIS_ARGOCD_BASE_URL=http://argocd-server.argocd.svc.cluster.local
+      - JARVIS_LOG_JSON=true
+
+# CI (Jarvis repo workflows) bumps newTag to the commit SHA on every push to
+# main; ArgoCD picks up the commit and rolls out. Do not edit newTag by hand.
+images:
+  - name: ghcr.io/gmottola00/jarvis-backend
+    newTag: latest
+  - name: ghcr.io/gmottola00/jarvis-web
+    newTag: latest

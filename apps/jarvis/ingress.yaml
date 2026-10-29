@@ -1,0 +1,19 @@
+# Tailscale Operator ingress: crea un device "jarvis" sulla tailnet con
+# certificato Let's Encrypt → https://jarvis.<tailnet>.ts.net
+# Tutto il traffico arriva al web; nginx serve la SPA e inoltra /api.
+# La tailnet è l'unico controllo d'accesso: le API di Jarvis non hanno login.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jarvis
+  namespace: jarvis
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: jarvis-web
+      port:
+        number: 80
+  tls:
+    - hosts:
+        - jarvis

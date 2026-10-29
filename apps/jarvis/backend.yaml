@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jarvis-backend
+  namespace: jarvis
+spec:
+  # Una sola replica: sessioni e approvazioni in sospeso vivono in memoria
+  # finché non arrivano Postgres e Redis. Due repliche avrebbero due memorie.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jarvis-backend
+  template:
+    metadata:
+      labels:
+        app: jarvis-backend
+    spec:
+      # Senza questa riga il pod userebbe il ServiceAccount `default`, che non
+      # ha permessi: ogni chiamata della console risponderebbe 403.
+      serviceAccountName: jarvis
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: backend
+          image: ghcr.io/gmottola00/jarvis-backend:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            # Valori non segreti, generati da kustomize con un hash nel nome:
+            # cambiarli cambia il nome, e quindi il pod template → rollout.
+            - configMapRef:
+                name: jarvis-config
+            - secretRef:
+                name: jarvis-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 768Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jarvis-backend
+  namespace: jarvis
+spec:
+  selector:
+    app: jarvis-backend
+  ports:
+    - port: 8000
+      targetPort: 8000

@@ -1,0 +1,58 @@
+# Jarvis legge il cluster dall'interno, con l'identità di questo ServiceAccount
+# (il token montato in /var/run/secrets/kubernetes.io/serviceaccount è quello
+# che `load_incluster_config()` usa al posto di ~/.kube/config).
+#
+# Solo verbi di lettura: le modifiche passano da Git e da ArgoCD, mai da qui.
+# Niente `secrets`: un'app esposta sulla tailnet non deve poterli leggere in
+# tutto il cluster. Il viewer dei manifest risponde 403 su un Secret, ed è
+# giusto così.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jarvis
+  namespace: jarvis
+---
+# ClusterRole (non Role) perché la console guarda tutti i namespace e anche
+# oggetti senza namespace, come nodi e namespace stessi.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: jarvis-reader
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/log
+      - nodes
+      - namespaces
+      - events
+      - services
+      - endpoints
+      - configmaps
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: [deployments, replicasets, statefulsets, daemonsets]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: [ingresses]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["events.k8s.io"]
+    resources: [events]
+    verbs: ["get", "list", "watch"]
+  # CPU/RAM live, quando metrics-server sarà installato.
+  - apiGroups: ["metrics.k8s.io"]
+    resources: [nodes, pods]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: jarvis-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: jarvis-reader
+subjects:
+  - kind: ServiceAccount
+    name: jarvis
+    namespace: jarvis
