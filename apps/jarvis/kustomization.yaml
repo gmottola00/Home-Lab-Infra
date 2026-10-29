@@ -10,7 +10,6 @@ resources:
   # can decrypt them.
   - sealed-secret.yaml
   - ghcr-pull-secret.yaml
-
 # Configurazione non segreta. Il generator aggiunge al nome un hash del
 # contenuto (jarvis-config-<hash>) e aggiorna i riferimenti nel Deployment:
 # un valore cambiato produce un pod template diverso, quindi un rollout. Una
@@ -33,6 +32,6 @@ configMapGenerator:
 # main; ArgoCD picks up the commit and rolls out. Do not edit newTag by hand.
 images:
   - name: ghcr.io/gmottola00/jarvis-backend
-    newTag: latest
+    newTag: 6746219573d581e8e82270fd556f7cff9ce80f87
   - name: ghcr.io/gmottola00/jarvis-web
-    newTag: latest
+    newTag: 6746219573d581e8e82270fd556f7cff9ce80f87
