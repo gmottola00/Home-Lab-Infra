@@ -15,6 +15,7 @@ iPhone ──[Tailscale]──────────────────�
   │  Tailscale Operator ── Ingress (cert LE *.ts.net)          │
   │       ├─ https://argocd.<tailnet>.ts.net  → ArgoCD UI      │
   │       ├─ https://grafana.<tailnet>.ts.net → Grafana        │
+  │       ├─ https://jarvis.<tailnet>.ts.net  → jarvis-web     │
   │       ├─ https://tickup.<tailnet>.ts.net  → tickup-web     │
   │       └─ https://trip-ai.<tailnet>.ts.net → trip-ai-web    │
   │                                ── /api/* → trip-ai-backend │
@@ -45,6 +46,7 @@ platform/                   # componenti piattaforma: values helm + manifest
   observability/            # values helm dello stack + manifest (ns, password Grafana)
 apps/
   trip-ai/                  # manifest kustomize dell'app (Deployment/Service/Ingress/secrets)
+  jarvis/                   # come trip-ai + ServiceAccount e ClusterRole di sola lettura
 legacy/                     # vecchio draft Caddy + docker-compose (riferimento storico)
 ```
 
@@ -207,7 +209,10 @@ helm upgrade --install argocd argo/argo-cd -n argocd -f platform/argocd/values.y
       Postgres/Redis in-cluster: Redis è inutilizzato nel codice e lo scheduling
       è APScheduler in-process → backend a replica singola)
 - [x] **Observability**: kube-prometheus-stack + Grafana + Loki ← siamo qui
-- [ ] **Jarvis**: PC fisso (RTX 5080) come k3s agent on-demand — Wake-on-LAN dal
+- [x] **Jarvis (app)**: agente + console read-only del cluster, stesso pattern
+      di Trip-AI più RBAC (ServiceAccount `jarvis` con ClusterRole `jarvis-reader`,
+      niente accesso ai Secret). Stato in memoria → replica singola
+- [ ] **Jarvis (GPU)**: PC fisso (RTX 5080) come k3s agent on-demand — Wake-on-LAN dal
       mini PC, Ollama esposto sulla tailnet, poi orchestratore + MCP
 - [ ] Auto-gestione della piattaforma: ArgoCD/operator/sealed-secrets adottati
       nel loop GitOps (app-of-apps anche per platform/)
