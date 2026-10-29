@@ -1,0 +1,78 @@
+# Primo Postgres nel cluster: tiene chiavi virtuali, budget e spesa di LiteLLM.
+# Un solo nodo, quindi niente operator né repliche: uno StatefulSet su local-path
+# basta, e il volume sopravvive a restart e redeploy del pod.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: litellm-postgres
+  namespace: litellm
+spec:
+  serviceName: litellm-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: litellm-postgres
+  template:
+    metadata:
+      labels:
+        app: litellm-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17.6-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: litellm
+            - name: POSTGRES_DB
+              value: litellm
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-secrets
+                  key: POSTGRES_PASSWORD
+            # Sottocartella: la root del volume local-path contiene lost+found
+            # su alcuni filesystem e initdb rifiuta una directory non vuota.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "litellm", "-d", "litellm"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "litellm", "-d", "litellm"]
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm-postgres
+  namespace: litellm
+spec:
+  selector:
+    app: litellm-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

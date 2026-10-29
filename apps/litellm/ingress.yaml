@@ -1,0 +1,18 @@
+# Tailscale Operator ingress → https://litellm.<tailnet>.ts.net
+# Admin UI (/ui) e API: login con LITELLM_MASTER_KEY. Spesa per chiave, budget,
+# creazione e revoca delle chiavi virtuali.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: litellm
+  namespace: litellm
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: litellm-proxy
+      port:
+        number: 4000
+  tls:
+    - hosts:
+        - litellm
