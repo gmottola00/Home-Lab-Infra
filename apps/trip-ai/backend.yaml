@@ -20,6 +20,11 @@ spec:
           image: ghcr.io/gmottola00/trip-ai-backend:latest
           ports:
             - containerPort: 8000
+          env:
+            # Claude via il pass-through di LiteLLM; ANTHROPIC_API_KEY in
+            # trip-ai-secrets è la chiave virtuale (make litellm-key APP=trip-ai).
+            - name: ANTHROPIC_BASE_URL
+              value: http://litellm-proxy.litellm.svc.cluster.local:4000/anthropic
           envFrom:
             - secretRef:
                 name: trip-ai-secrets
