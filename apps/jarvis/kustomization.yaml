@@ -27,6 +27,12 @@ configMapGenerator:
       # se il PC con la GPU è acceso.
       - JARVIS_LLM_GATEWAY_URL=http://litellm-proxy.litellm.svc.cluster.local:4000
       - JARVIS_OLLAMA_URL=http://ollama-gpu.litellm.svc.cluster.local:11434
+      # Osservabilità, sola lettura: metriche, log storici e alert per i tool
+      # prometheus__*, loki__* e alertmanager__* e per la pagina Alerts.
+      # Nessuna auth, il traffico resta nel cluster.
+      - JARVIS_PROMETHEUS_URL=http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+      - JARVIS_LOKI_URL=http://loki.monitoring.svc.cluster.local:3100
+      - JARVIS_ALERTMANAGER_URL=http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093
 # CI (Jarvis repo workflows) bumps newTag to the commit SHA on every push to
 # main; ArgoCD picks up the commit and rolls out. Do not edit newTag by hand.
 images:
