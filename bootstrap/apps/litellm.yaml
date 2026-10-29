@@ -15,3 +15,13 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true
+  # L'operator Tailscale riscrive externalName dell'egress verso il suo proxy:
+  # senza questo selfHeal lo rimetterebbe a "placeholder" rompendo la rotta.
+  ignoreDifferences:
+    - kind: Service
+      name: ollama-gpu
+      namespace: litellm
+      jsonPointers:
+        - /spec/externalName
