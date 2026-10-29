@@ -1,0 +1,75 @@
+# LiteLLM Proxy: l'unico punto da cui passano le chiamate ai modelli.
+# Le app usano chiavi virtuali (revocabili, con budget); la vera
+# ANTHROPIC_API_KEY esiste solo in litellm-secrets.
+#
+#   http://litellm-proxy.litellm.svc.cluster.local:4000/anthropic   pass-through Anthropic (Claude, API nativa)
+#   http://litellm-proxy.litellm.svc.cluster.local:4000/v1/messages formato Anthropic, qualsiasi modello (Ollama)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm-proxy
+  namespace: litellm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: litellm-proxy
+  template:
+    metadata:
+      labels:
+        app: litellm-proxy
+    spec:
+      containers:
+        - name: proxy
+          # Variante "-database": include il client Prisma e applica da sola le
+          # migrazioni allo start. Tag fisso: CI non lo bumpa, si aggiorna a mano.
+          image: ghcr.io/berriai/litellm-database:v1.105.1
+          args: ["--config", "/app/config.yaml", "--port", "4000"]
+          ports:
+            - containerPort: 4000
+          envFrom:
+            - secretRef:
+                name: litellm-secrets
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+          # Le migrazioni Prisma al primo avvio richiedono più di un minuto.
+          startupProbe:
+            httpGet:
+              path: /health/liveliness
+              port: 4000
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 4000
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: 4000
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: config
+          configMap:
+            name: litellm-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm-proxy
+  namespace: litellm
+spec:
+  selector:
+    app: litellm-proxy
+  ports:
+    - port: 4000
+      targetPort: 4000

@@ -9,6 +9,8 @@ APP  ?= trip-ai
 NS   ?= $(APP)
 COMP ?= backend
 TAIL ?= 200
+BUDGET ?= 10
+MODELS ?=
 
 APPS := $(notdir $(wildcard apps/*))
 DEPLOY := $(APP)-$(COMP)
@@ -192,6 +194,20 @@ seal: ## Sigilla un .env in apps/APP/sealed-secret.yaml (ENV_FILE=path/to/.env)
 		| kubeseal --controller-namespace kube-system -o yaml \
 		> apps/$(APP)/sealed-secret.yaml
 	@echo "scritto apps/$(APP)/sealed-secret.yaml — rivedi il diff e committa"
+
+.PHONY: litellm-key
+# La master key non esce dal cluster: la chiamata parte da dentro il pod del
+# proxy. Gli alias sono unici: un 400 di solito vuol dire che la chiave di APP
+# esiste già (revocala dalla UI prima di crearne un'altra).
+litellm-key: ## Crea una chiave virtuale LiteLLM per APP (BUDGET=dollari ogni 30gg, MODELS=a,b — vuoto = tutti)
+	$(call check-app)
+	@kubectl -n litellm exec deploy/litellm-proxy -- python -c "import os, json, urllib.request as u; \
+		models = [m for m in '$(MODELS)'.split(',') if m]; \
+		body = {'key_alias': '$(APP)', 'models': models, 'max_budget': float('$(BUDGET)'), 'budget_duration': '30d'}; \
+		req = u.Request('http://localhost:4000/key/generate', data=json.dumps(body).encode(), \
+			headers={'Authorization': 'Bearer ' + os.environ['LITELLM_MASTER_KEY'], 'Content-Type': 'application/json'}); \
+		print(json.load(u.urlopen(req))['key'])"
+	@echo "↑ chiave virtuale di $(APP): mettila come ANTHROPIC_API_KEY nel .env dell'app e risigilla"
 
 .PHONY: secrets
 secrets: ## Secret decifrati presenti nel namespace di APP (solo i nomi)

@@ -16,14 +16,18 @@ iPhone ──[Tailscale]──────────────────�
   │       ├─ https://argocd.<tailnet>.ts.net  → ArgoCD UI      │
   │       ├─ https://grafana.<tailnet>.ts.net → Grafana        │
   │       ├─ https://jarvis.<tailnet>.ts.net  → jarvis-web     │
+  │       ├─ https://litellm.<tailnet>.ts.net → LiteLLM UI     │
   │       ├─ https://tickup.<tailnet>.ts.net  → tickup-web     │
   │       └─ https://trip-ai.<tailnet>.ts.net → trip-ai-web    │
   │                                ── /api/* → trip-ai-backend │
   │  ArgoCD ── sync da questo repo (app-of-apps)               │
   │  Sealed Secrets ── secrets cifrati committati in Git       │
   │  Prometheus + Loki ── metriche e log di ogni pod → Grafana │
+  │  LiteLLM ── gateway LLM: chiavi virtuali, budget, routing  │
+  │       ├─ claude-* → api.anthropic.com                      │
+  │       └─ local/*  → egress tailnet → Ollama (PC con GPU)   │
   └────────────────────────────────────────────────────────────┘
-        DB/Auth: Supabase (cloud) — nessun Postgres nel cluster (per ora)
+        DB/Auth: Supabase (cloud); in-cluster solo il Postgres di LiteLLM
         Immagini: GHCR, buildate da GitHub Actions nei repo delle app
 ```
 
@@ -47,6 +51,7 @@ platform/                   # componenti piattaforma: values helm + manifest
 apps/
   trip-ai/                  # manifest kustomize dell'app (Deployment/Service/Ingress/secrets)
   jarvis/                   # come trip-ai + ServiceAccount e ClusterRole di sola lettura
+  litellm/                  # gateway LLM: proxy + Postgres + egress verso Ollama
 legacy/                     # vecchio draft Caddy + docker-compose (riferimento storico)
 ```
 
@@ -148,6 +153,42 @@ kubectl create secret generic <nome> -n <namespace> \
 
 Il file cifrato è committabile: solo il controller nel cluster può decifrarlo.
 
+## Gateway LLM (LiteLLM)
+
+Tutte le chiamate ai modelli delle app passano da LiteLLM. La vera
+`ANTHROPIC_API_KEY` vive solo in `litellm-secrets`; le app hanno una **chiave
+virtuale** ciascuna, revocabile e con budget, e la spesa si vede per chiave su
+`https://litellm.<tailnet>.ts.net/ui` (login con la master key).
+
+| Endpoint (dal cluster) | Per cosa |
+|---|---|
+| `http://litellm-proxy.litellm.svc.cluster.local:4000/anthropic` | Claude con l'API nativa (pass-through: thinking, effort, structured outputs invariati) |
+| `http://litellm-proxy.litellm.svc.cluster.local:4000/v1/messages` | formato Anthropic verso qualsiasi modello, anche `local/*` (LiteLLM traduce per Ollama) |
+
+I modelli sono in `apps/litellm/config.yaml`: `claude-*` sono Anthropic,
+`local/*` sono Ollama sul PC fisso, raggiunto dal Service `ollama-gpu` (egress
+del Tailscale Operator verso `pop-os`). PC spento → fallback su
+`claude-haiku-4-5`. Le ACL della tailnet devono permettere `tag:k8s` →
+`pop-os:11434`.
+
+**Primo deploy:**
+
+```bash
+# 1. secret (valori veri solo nel file locale, mai in Git)
+cat > /tmp/litellm.env <<'ENV'
+LITELLM_MASTER_KEY=sk-<random>
+LITELLM_SALT_KEY=sk-<random, non cambiarlo più: cifra le chiavi nel DB>
+ANTHROPIC_API_KEY=sk-ant-...
+POSTGRES_PASSWORD=<random>
+DATABASE_URL=postgresql://litellm:<stessa password>@litellm-postgres:5432/litellm
+ENV
+make seal APP=litellm ENV_FILE=/tmp/litellm.env && rm /tmp/litellm.env
+# 2. commit + push → ArgoCD crea namespace, Postgres e proxy
+# 3. una chiave virtuale per app, poi va nel .env dell'app al posto della chiave vera
+make litellm-key APP=jarvis BUDGET=20
+make litellm-key APP=trip-ai BUDGET=20 MODELS=claude-haiku-4-5,claude-sonnet-5
+```
+
 ## Observability
 
 Metriche e log di tutto il cluster, su `https://grafana.<tailnet>.ts.net`
@@ -212,7 +253,9 @@ helm upgrade --install argocd argo/argo-cd -n argocd -f platform/argocd/values.y
 - [x] **Jarvis (app)**: agente + console read-only del cluster, stesso pattern
       di Trip-AI più RBAC (ServiceAccount `jarvis` con ClusterRole `jarvis-reader`,
       niente accesso ai Secret). Stato in memoria → replica singola
-- [ ] **Jarvis (GPU)**: PC fisso (RTX 5080) come k3s agent on-demand — Wake-on-LAN dal
-      mini PC, Ollama esposto sulla tailnet, poi orchestratore + MCP
+- [x] **Gateway LLM**: LiteLLM + Postgres in-cluster, chiavi virtuali per app,
+      Ollama sul PC fisso (RTX 5080) via egress tailnet con fallback su Claude
+- [ ] **Jarvis (GPU)**: PC fisso come k3s agent on-demand — Wake-on-LAN dal
+      mini PC, poi orchestratore + MCP
 - [ ] Auto-gestione della piattaforma: ArgoCD/operator/sealed-secrets adottati
       nel loop GitOps (app-of-apps anche per platform/)

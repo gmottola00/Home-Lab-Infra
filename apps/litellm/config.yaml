@@ -1,0 +1,66 @@
+# Configurazione di LiteLLM. Montata nel pod tramite configMapGenerator: un
+# cambiamento qui cambia l'hash della ConfigMap e quindi provoca un rollout.
+#
+# Convenzione sui nomi, su cui conta Jarvis: "claude-*" sono modelli Anthropic
+# (chiamati via pass-through con l'API nativa), "local/*" sono modelli Ollama.
+
+model_list:
+  # --- Claude (la sola chiave vera sta in litellm-secrets) ------------------
+  - model_name: claude-opus-5
+    litellm_params:
+      model: anthropic/claude-opus-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-sonnet-5
+    litellm_params:
+      model: anthropic/claude-sonnet-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: anthropic/claude-haiku-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # --- Locali: Ollama sul PC con la GPU (vedi ollama-egress.yaml) -----------
+  # stream_timeout limita l'attesa del primo token: a PC spento il proxy
+  # Tailscale non risponde e senza limite la richiesta resterebbe appesa.
+  # 30 s lasciano il tempo di caricare un modello in VRAM a freddo. Jarvis
+  # controlla da sé se la GPU è accesa e in quel caso salta direttamente al
+  # fallback, quindi questa attesa la paga solo chi non fa il controllo.
+  - model_name: local/qwen3-30b
+    litellm_params:
+      model: ollama_chat/qwen3:30b
+      api_base: http://ollama-gpu.litellm.svc.cluster.local:11434
+      timeout: 120
+      stream_timeout: 30
+  - model_name: local/qwen3-14b
+    litellm_params:
+      model: ollama_chat/qwen3:14b
+      api_base: http://ollama-gpu.litellm.svc.cluster.local:11434
+      timeout: 120
+      stream_timeout: 30
+  - model_name: local/qwen2.5-coder-7b
+    litellm_params:
+      model: ollama_chat/qwen2.5-coder:7b
+      api_base: http://ollama-gpu.litellm.svc.cluster.local:11434
+      timeout: 120
+      stream_timeout: 30
+
+router_settings:
+  # GPU spenta → Claude Haiku. num_retries: 0 è essenziale: con un solo
+  # deployment per gruppo LiteLLM non applica il cooldown e ogni retry aspetta
+  # un backoff, cioè ~5 s di attesa prima del fallback a ogni richiesta.
+  fallbacks:
+    - local/qwen3-30b: [claude-haiku-4-5]
+    - local/qwen3-14b: [claude-haiku-4-5]
+    - local/qwen2.5-coder-7b: [claude-haiku-4-5]
+  num_retries: 0
+  allowed_fails: 1
+  cooldown_time: 60
+
+litellm_settings:
+  # Parametri che un provider non supporta vengono scartati invece di far
+  # fallire la richiesta (es. parametri Claude-only verso Ollama).
+  drop_params: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL

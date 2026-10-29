@@ -1,0 +1,22 @@
+# Egress verso la tailnet: Ollama gira sul PC fisso (RTX 5080, device "pop-os"),
+# fuori dal cluster. Il Tailscale Operator crea un proxy per questo Service e lo
+# punta al device: dai pod basta http://ollama-gpu.litellm.svc.cluster.local:11434.
+#
+# Se il PC è spento la connessione fallisce subito e LiteLLM passa al fallback
+# Claude (vedi config.yaml). Le ACL della tailnet devono permettere a tag:k8s di
+# raggiungere pop-os:11434.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-gpu
+  namespace: litellm
+  annotations:
+    tailscale.com/tailnet-fqdn: pop-os.tail682dc3.ts.net
+spec:
+  type: ExternalName
+  # Sovrascritto dall'operator con l'indirizzo del suo proxy.
+  externalName: placeholder
+  ports:
+    - name: ollama
+      port: 11434
+      protocol: TCP
