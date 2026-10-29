@@ -209,6 +209,11 @@ litellm-key: ## Crea una chiave virtuale LiteLLM per APP (BUDGET=dollari ogni 30
 		print(json.load(u.urlopen(req))['key'])"
 	@echo "↑ chiave virtuale di $(APP): mettila come ANTHROPIC_API_KEY nel .env dell'app e risigilla"
 
+.PHONY: litellm-rekey
+litellm-rekey: ## Nuova chiave virtuale per APP e risigilla il suo secret (BUDGET, MODELS come litellm-key)
+	$(call check-app)
+	@scripts/litellm-rekey.sh $(APP) "$(MODELS)" $(BUDGET)
+
 .PHONY: secrets
 secrets: ## Secret decifrati presenti nel namespace di APP (solo i nomi)
 	$(call check-app)

@@ -184,10 +184,19 @@ DATABASE_URL=postgresql://litellm:<stessa password>@litellm-postgres:5432/litell
 ENV
 make seal APP=litellm ENV_FILE=/tmp/litellm.env && rm /tmp/litellm.env
 # 2. commit + push → ArgoCD crea namespace, Postgres e proxy
-# 3. una chiave virtuale per app, poi va nel .env dell'app al posto della chiave vera
-make litellm-key APP=jarvis BUDGET=20
-make litellm-key APP=trip-ai BUDGET=20 MODELS=claude-haiku-4-5,claude-sonnet-5
+# 3. una chiave virtuale per app: la crea e risigilla il secret dell'app con
+#    quella al posto della chiave vera (gli altri valori restano come sono)
+make litellm-rekey APP=jarvis BUDGET=20
+make litellm-rekey APP=trip-ai BUDGET=20
+# 4. commit + push, poi riavvia i backend (un secret nuovo non li riavvia da solo)
+kubectl -n jarvis rollout restart deploy/jarvis-backend
+kubectl -n trip-ai rollout restart deploy/trip-ai-backend
 ```
+
+Trip-AI non ha filtro sui modelli: usa id datati (`claude-haiku-4-5-20251001`)
+che il pass-through inoltra così come sono, ma che non sono nomi di
+`config.yaml`. Gli alias delle chiavi sono unici: per rifare la chiave di
+un'app revoca prima quella vecchia dalla UI (Virtual Keys → Delete).
 
 ## Observability
 
