@@ -16,3 +16,6 @@ images:
     newTag: e259bef203ffbd3279d90846cbdc95d5c5043068
   - name: ghcr.io/gmottola00/tickup-web
     newTag: e259bef203ffbd3279d90846cbdc95d5c5043068
+replicas:
+  - name: tickup-backend
+    count: 0
