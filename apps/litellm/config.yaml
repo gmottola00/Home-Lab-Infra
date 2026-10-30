@@ -23,8 +23,8 @@ model_list:
   # stream_timeout limita l'attesa del primo token: a PC spento il proxy
   # Tailscale non risponde e senza limite la richiesta resterebbe appesa.
   # 30 s lasciano il tempo di caricare un modello in VRAM a freddo. Jarvis
-  # controlla da sé se la GPU è accesa e in quel caso salta direttamente al
-  # fallback, quindi questa attesa la paga solo chi non fa il controllo.
+  # controlla da sé se la GPU è accesa e, se è spenta, chiede all'utente il
+  # consenso prima di passare a Claude.
   - model_name: local/qwen3-30b
     litellm_params:
       model: ollama_chat/qwen3:30b
@@ -45,13 +45,12 @@ model_list:
       stream_timeout: 30
 
 router_settings:
-  # GPU spenta → Claude Haiku. num_retries: 0 è essenziale: con un solo
-  # deployment per gruppo LiteLLM non applica il cooldown e ogni retry aspetta
-  # un backoff, cioè ~5 s di attesa prima del fallback a ogni richiesta.
-  fallbacks:
-    - local/qwen3-30b: [claude-haiku-4-5]
-    - local/qwen3-14b: [claude-haiku-4-5]
-    - local/qwen2.5-coder-7b: [claude-haiku-4-5]
+  # Nessun fallback local/* → Claude qui: sarebbe silenzioso, e chi sceglie un
+  # modello locale non deve ricevere una risposta di Claude senza saperlo.
+  # A GPU spenta la richiesta fallisce con un errore; il consenso al fallback
+  # lo chiede Jarvis. num_retries: 0 è essenziale: con un solo deployment per
+  # gruppo LiteLLM non applica il cooldown e ogni retry aspetta un backoff,
+  # cioè ~5 s in più prima dell'errore a ogni richiesta.
   num_retries: 0
   allowed_fails: 1
   cooldown_time: 60
