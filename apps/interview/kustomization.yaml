@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - backend.yaml
+  - ingress.yaml
+  # Encrypted with kubeseal — safe to commit; only the in-cluster controller
+  # can decrypt them.
+  # interview-secrets: LLM_API_KEY (chiave virtuale LiteLLM, make litellm-rekey)
+  - sealed-secret.yaml
+  # interview-db: DATABASE_URL verso pg-shared (make pg-user APP=interview)
+  - db-sealed-secret.yaml
+  - ghcr-pull-secret.yaml
+configMapGenerator:
+  - name: interview-config
+    namespace: interview
+    literals:
+      - LLM_BASE_URL=http://litellm-proxy.litellm.svc.cluster.local:4000/v1
+      # Generazione sulla GPU. LiteLLM non ripiega su Claude: a PC spento la
+      # generazione finisce in `error` e si rilancia dalla UI.
+      - GENERATION_MODEL=local/qwen3-14b
+      - EVALUATION_MODEL=claude-haiku-4-5
+      - LLM_TIMEOUT=120
+      # response_format json_object: LiteLLM lo traduce per Anthropic. Se Haiku
+      # lo rifiuta, false (i prompt chiedono comunque JSON).
+      - LLM_JSON_MODE=true
+# CI (tech-interview-generator, deploy.yml) bumps newTag to the commit SHA on
+# every push to main; ArgoCD picks up the commit and rolls out. Do not edit
+# newTag by hand.
+images:
+  - name: ghcr.io/gmottola00/interview-backend
+    newTag: latest

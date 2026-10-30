@@ -15,6 +15,7 @@ iPhone ──[Tailscale]──────────────────�
   │  Tailscale Operator ── Ingress (cert LE *.ts.net)          │
   │       ├─ https://argocd.<tailnet>.ts.net  → ArgoCD UI      │
   │       ├─ https://grafana.<tailnet>.ts.net → Grafana        │
+  │       ├─ https://interview.<tailnet>.ts.net → interview    │
   │       ├─ https://jarvis.<tailnet>.ts.net  → jarvis-web     │
   │       ├─ https://litellm.<tailnet>.ts.net → LiteLLM UI     │
   │       ├─ https://tickup.<tailnet>.ts.net  → tickup-web     │
@@ -26,8 +27,11 @@ iPhone ──[Tailscale]──────────────────�
   │  LiteLLM ── gateway LLM: chiavi virtuali, budget, routing  │
   │       ├─ claude-* → api.anthropic.com                      │
   │       └─ local/*  → egress tailnet → Ollama (PC con GPU)   │
+  │  CloudNativePG ── pg-shared: un Postgres, un DB per app    │
+  │       └─ dump notturni (pg_dump) su volume, 7 giorni       │
   └────────────────────────────────────────────────────────────┘
-        DB/Auth: Supabase (cloud); in-cluster solo il Postgres di LiteLLM
+        DB/Auth: Supabase (cloud) per Trip-AI e TickUp; in-cluster
+        pg-shared (Interview Trainer) e il Postgres di LiteLLM
         Immagini: GHCR, buildate da GitHub Actions nei repo delle app
 ```
 
@@ -48,10 +52,12 @@ platform/                   # componenti piattaforma: values helm + manifest
   sealed-secrets/
   tailscale-operator/
   observability/            # values helm dello stack + manifest (ns, password Grafana)
+  postgres/                 # values dell'operator CNPG + Cluster pg-shared, DB, ruoli, backup
 apps/
   trip-ai/                  # manifest kustomize dell'app (Deployment/Service/Ingress/secrets)
   jarvis/                   # come trip-ai + ServiceAccount e ClusterRole di sola lettura
   litellm/                  # gateway LLM: proxy + Postgres + egress verso Ollama
+  interview/                # Interview Trainer: backend FastAPI su pg-shared
 legacy/                     # vecchio draft Caddy + docker-compose (riferimento storico)
 ```
 
@@ -198,6 +204,60 @@ che il pass-through inoltra così come sono, ma che non sono nomi di
 `config.yaml`. Gli alias delle chiavi sono unici: per rifare la chiave di
 un'app revoca prima quella vecchia dalla UI (Virtual Keys → Delete).
 
+## Postgres condiviso (CloudNativePG)
+
+Un solo server Postgres per le app del cluster, `pg-shared` nel namespace
+`databases`, gestito dall'operator **CloudNativePG**. Ogni app ha in Git il suo
+database e il suo ruolo; l'operator li crea e ne mantiene la password.
+
+| Pezzo | Dove |
+|---|---|
+| operator (chart `cloudnative-pg`) | `bootstrap/apps/postgres.yaml` → `cnpg-operator`, values in `platform/postgres/cnpg-values.yaml` |
+| Cluster `pg-shared` (1 istanza, Postgres 17, 20Gi) + ruoli | `platform/postgres/manifests/cluster.yaml` |
+| un `Database` per app | `platform/postgres/manifests/databases/<app>.yaml` |
+| password dei ruoli (sigillate) | `platform/postgres/manifests/roles/<app>-sealed.yaml` |
+| dump notturni | `platform/postgres/manifests/backup.yaml` |
+
+Endpoint per le app: `pg-shared-rw.databases.svc.cluster.local:5432`.
+
+**Aggiungere il database di un'app** (es. `foo`, con `apps/foo/` già esistente):
+
+1. In `cluster.yaml`, sotto `managed.roles`, un ruolo `foo` con `passwordSecret: pg-role-foo`.
+2. `databases/foo.yaml` (copia di `interview.yaml`), e le righe
+   `databases/foo.yaml` e `roles/foo-sealed.yaml` in `platform/postgres/manifests/kustomization.yaml`.
+3. `make pg-user APP=foo`: genera la password e sigilla `roles/foo-sealed.yaml` (per
+   CNPG) e `apps/foo/db-sealed-secret.yaml` (Secret `foo-db` con `DATABASE_URL`, da
+   montare nel Deployment con `envFrom`). La password non passa dal terminale.
+4. Aggiungi `db-sealed-secret.yaml` alla kustomization dell'app, poi commit e push.
+
+```bash
+make pg-status                # cluster, database, ruoli, pod, PVC, job di backup
+make pg-psql DB=interview     # psql come superuser nel primary
+make pg-backup                # backup subito (job dal CronJob) con i log
+make pg-backups               # elenco dei dump sul volume
+```
+
+**Backup.** Ogni notte alle 03:00 il CronJob `pg-backup` scrive in
+`/backups/<data>/` `globals.sql` (ruoli) e un `pg_dump -Fc` per ogni database, e
+tiene 7 giorni. Sono sullo stesso disco del database: proteggono da errori (DROP,
+migrazione sbagliata, Cluster cancellato), non da un guasto del disco. Il passo
+successivo è portarli fuori (S3). Restore di un DB:
+
+```bash
+# dal pod di un job o di `make pg-backups` con il volume montato
+pg_restore -h pg-shared-rw -U postgres -d <db> --clean --if-exists /backups/<data>/<db>.dump
+```
+
+> **Attenzione:** l'unica StorageClass (`local-path`) ha `reclaimPolicy: Delete`.
+> Cancellare il Cluster, il suo PVC o il namespace `databases` cancella i dati.
+> Per questo Cluster, PVC dei backup e namespace hanno
+> `argocd.argoproj.io/sync-options: Prune=false,Delete=false`: ArgoCD non li
+> rimuove nemmeno se spariscono da Git. Un `Database` tolto da Git non fa
+> `DROP DATABASE` (`databaseReclaimPolicy: retain`).
+
+LiteLLM resta per ora sul suo Postgres (`apps/litellm/postgres.yaml`); il
+trasloco su `pg-shared` è un passo successivo.
+
 ## Observability
 
 Metriche e log di tutto il cluster, su `https://grafana.<tailnet>.ts.net`
@@ -258,12 +318,18 @@ helm upgrade --install argocd argo/argo-cd -n argocd -f platform/argocd/values.y
 - [x] **TickUp**: stesso pattern di Trip-AI (Supabase cloud come DB, niente
       Postgres/Redis in-cluster: Redis è inutilizzato nel codice e lo scheduling
       è APScheduler in-process → backend a replica singola)
-- [x] **Observability**: kube-prometheus-stack + Grafana + Loki ← siamo qui
+- [x] **Observability**: kube-prometheus-stack + Grafana + Loki
 - [x] **Jarvis (app)**: agente + console read-only del cluster, stesso pattern
       di Trip-AI più RBAC (ServiceAccount `jarvis` con ClusterRole `jarvis-reader`,
       niente accesso ai Secret). Stato in memoria → replica singola
 - [x] **Gateway LLM**: LiteLLM + Postgres in-cluster, chiavi virtuali per app,
       Ollama sul PC fisso (RTX 5080) via egress tailnet con fallback su Claude
+- [x] **Postgres condiviso**: CloudNativePG, `pg-shared` con un database per app
+      dichiarato in Git, dump notturni su volume
+- [ ] **Interview Trainer**: primo utente di `pg-shared`, generazione su GPU e
+      valutazione su Haiku via LiteLLM ← siamo qui (manca la migrazione dei
+      dati da SQLite, poi `replicas: 1`)
+- [ ] Backup di `pg-shared` fuori dal nodo (S3 / barman-cloud) e LiteLLM su `pg-shared`
 - [ ] **Jarvis (GPU)**: PC fisso come k3s agent on-demand — Wake-on-LAN dal
       mini PC, poi orchestratore + MCP
 - [ ] Auto-gestione della piattaforma: ArgoCD/operator/sealed-secrets adottati

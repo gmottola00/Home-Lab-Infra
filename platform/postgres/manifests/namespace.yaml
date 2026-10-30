@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: databases
+  annotations:
+    # Cancellare il namespace cancellerebbe Cluster, PVC e dati con lui.
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false

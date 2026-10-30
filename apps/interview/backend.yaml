@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: interview-backend
+  namespace: interview
+spec:
+  # 0 finché i dati locali non sono migrati in pg-shared/interview: all'avvio
+  # l'app crea lo schema e inserisce le categorie, con id che poi
+  # colliderebbero con quelli copiati da SQLite. Dopo la migrazione → 1.
+  #
+  # Mai più di 1: generazione e valutazione girano nel processo, e all'avvio
+  # l'app marca `error` ogni job rimasto `pending`, convinta che nessun altro
+  # ci stia lavorando.
+  replicas: 0
+  # Per lo stesso motivo niente RollingUpdate: il pod nuovo, partendo mentre il
+  # vecchio è ancora vivo, fallirebbe i job che quello sta eseguendo.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: interview-backend
+  template:
+    metadata:
+      labels:
+        app: interview-backend
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: backend
+          image: ghcr.io/gmottola00/interview-backend:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            # Modelli e gateway LLM (configMapGenerator: un valore cambiato →
+            # rollout).
+            - configMapRef:
+                name: interview-config
+            # LLM_API_KEY: chiave virtuale LiteLLM (make litellm-rekey).
+            - secretRef:
+                name: interview-secrets
+            # DATABASE_URL verso pg-shared (make pg-user APP=interview).
+            - secretRef:
+                name: interview-db
+          # /health non tocca né LLM né DB: un PC con la GPU spento non deve
+          # far riavviare il pod. Le migrazioni Alembic girano prima che la
+          # probe risponda, quindi una migrazione fallita = pod mai Ready.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: interview-backend
+  namespace: interview
+spec:
+  selector:
+    app: interview-backend
+  ports:
+    - port: 8000
+      targetPort: 8000

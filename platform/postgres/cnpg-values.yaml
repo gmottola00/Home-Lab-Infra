@@ -1,0 +1,14 @@
+# Values del chart cloudnative-pg (l'operator). Il Postgres vero e proprio è in
+# manifests/cluster.yaml.
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+# Metriche dell'operator (reconcile, errori). Prometheus seleziona tutti i
+# PodMonitor del cluster, senza bisogno di label particolari.
+monitoring:
+  podMonitorEnabled: true

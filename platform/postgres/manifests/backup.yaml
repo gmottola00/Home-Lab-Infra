@@ -1,0 +1,90 @@
+# Dump logici notturni di pg-shared su un volume del cluster.
+#
+# Stesso disco del database: protegge da errori (DROP, migrazione sbagliata,
+# Cluster cancellato), non da un guasto del disco. Il passo successivo è
+# copiarli fuori (S3 o barman-cloud).
+#
+# Layout: /backups/<YYYY-MM-DD>/globals.sql (ruoli) + <db>.dump (pg_dump -Fc).
+# Restore di un DB: pg_restore -d <db> --clean --if-exists <db>.dump
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pg-backups
+  namespace: databases
+  annotations:
+    # reclaimPolicy Delete: senza questo un prune cancellerebbe i dump.
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pg-backup
+  namespace: databases
+spec:
+  schedule: "0 3 * * *"
+  timeZone: Europe/Rome
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: dump
+              # Stessa immagine del Cluster: pg_dump della stessa versione del server.
+              image: ghcr.io/cloudnative-pg/postgresql:17.11-standard-trixie
+              env:
+                - name: PGHOST
+                  value: pg-shared-rw
+                - name: PGUSER
+                  valueFrom:
+                    secretKeyRef:
+                      name: pg-shared-superuser
+                      key: username
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: pg-shared-superuser
+                      key: password
+                - name: KEEP_DAYS
+                  value: "7"
+              command:
+                - bash
+                - -c
+                - |
+                  set -euo pipefail
+                  day=$(date +%F)
+                  # Si scrive in una cartella temporanea e la si rinomina alla
+                  # fine: un dump a metà non sembra mai un backup buono.
+                  tmp=/backups/.tmp-$day
+                  rm -rf "$tmp" && mkdir -p "$tmp"
+                  pg_dumpall --globals-only > "$tmp/globals.sql"
+                  for db in $(psql -d postgres -Atc "select datname from pg_database where not datistemplate and datname <> 'postgres'"); do
+                    pg_dump -Fc -d "$db" -f "$tmp/$db.dump"
+                    echo "dump $db: $(du -h "$tmp/$db.dump" | cut -f1)"
+                  done
+                  rm -rf "/backups/$day" && mv "$tmp" "/backups/$day"
+                  find /backups -mindepth 1 -maxdepth 1 -type d -name '20*' -mtime +"$KEEP_DAYS" -print -exec rm -rf {} +
+                  echo "backup $day ok"
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 512Mi
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: pg-backups

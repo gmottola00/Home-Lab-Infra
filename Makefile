@@ -11,6 +11,8 @@ COMP ?= backend
 TAIL ?= 200
 BUDGET ?= 10
 MODELS ?=
+KEY_VAR ?= ANTHROPIC_API_KEY
+DB ?= postgres
 
 APPS := $(notdir $(wildcard apps/*))
 DEPLOY := $(APP)-$(COMP)
@@ -119,7 +121,12 @@ diff: ## Diff fra i manifest di APP in Git e ciò che gira nel cluster
 validate: ## Dry-run server-side di tutte le app (da fare prima del push)
 	@for a in $(APPS); do \
 		echo "== $$a"; \
-		kubectl kustomize apps/$$a | kubectl apply --dry-run=server -f - >/dev/null || exit 1; \
+		if kubectl get ns $$a >/dev/null 2>&1; then \
+			kubectl kustomize apps/$$a | kubectl apply --dry-run=server -f - >/dev/null || exit 1; \
+		else \
+			kubectl kustomize apps/$$a | kubectl apply --dry-run=client -f - >/dev/null || exit 1; \
+			echo "   (ns $$a non ancora nel cluster: validazione solo client-side)"; \
+		fi; \
 	done
 	@echo "== observability"
 	@if kubectl get ns monitoring >/dev/null 2>&1; then \
@@ -129,6 +136,14 @@ validate: ## Dry-run server-side di tutte le app (da fare prima del push)
 		kubectl kustomize platform/observability/manifests \
 			| kubectl apply --dry-run=client -f - >/dev/null || exit 1; \
 		echo "   (ns monitoring non ancora nel cluster: validazione solo client-side)"; \
+	fi
+	@echo "== postgres"
+	@if kubectl get crd clusters.postgresql.cnpg.io >/dev/null 2>&1 && kubectl get ns databases >/dev/null 2>&1; then \
+		kubectl kustomize platform/postgres/manifests \
+			| kubectl apply --dry-run=server -f - >/dev/null || exit 1; \
+	else \
+		kubectl kustomize platform/postgres/manifests >/dev/null || exit 1; \
+		echo "   (CRD di CNPG o ns databases non ancora nel cluster: solo render kustomize)"; \
 	fi
 	@kubectl apply --dry-run=server -f bootstrap/root-app.yaml >/dev/null
 	@kubectl apply --dry-run=server -f bootstrap/apps/ >/dev/null
@@ -182,6 +197,39 @@ obs-targets: ## Target di scrape down — la prima cosa da guardare se manca una
 obs-pf: ## Port-forward di Prometheus su localhost:9090 (PromQL senza passare da Grafana)
 	kubectl -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090:9090
 
+##@ Postgres (pg-shared, namespace databases)
+
+PG_PRIMARY = $$(kubectl -n databases get pod -l cnpg.io/cluster=pg-shared,cnpg.io/instanceRole=primary -o name)
+
+.PHONY: pg-status
+pg-status: ## Cluster, database, ruoli, pod e volumi di pg-shared
+	@kubectl -n databases get cluster,database,pods,pvc
+	@echo
+	@echo "ruoli: $$(kubectl -n databases get cluster pg-shared -o jsonpath='{.status.managedRolesStatus.byStatus}')"
+	@echo
+	@kubectl -n databases get cronjob,job
+
+.PHONY: pg-psql
+pg-psql: ## psql come superuser nel primary (DB=nome, default postgres)
+	kubectl -n databases exec -it $(PG_PRIMARY) -c postgres -- psql -d $(DB)
+
+.PHONY: pg-user
+pg-user: ## Password del ruolo APP: sigilla roles/APP-sealed.yaml e apps/APP/db-sealed-secret.yaml
+	$(call check-app)
+	@scripts/pg-user.sh $(APP)
+
+.PHONY: pg-backup
+pg-backup: ## Lancia subito il CronJob di backup e ne segue i log
+	@job=pg-backup-manual-$$(date +%s); \
+	kubectl -n databases create job --from=cronjob/pg-backup $$job && \
+	kubectl -n databases wait --for=condition=Ready pod -l job-name=$$job --timeout=120s >/dev/null; \
+	kubectl -n databases logs -f job/$$job
+
+.PHONY: pg-backups
+pg-backups: ## Elenco dei dump sul volume pg-backups
+	@kubectl -n databases run pg-backups-ls --rm -i --quiet --restart=Never --image=busybox:1.37 \
+		--overrides='{"spec":{"containers":[{"name":"ls","image":"busybox:1.37","command":["sh","-c","cd /backups && du -sh 20* 2>/dev/null; ls -l 20*/ 2>/dev/null || echo nessun backup"],"volumeMounts":[{"name":"b","mountPath":"/backups"}]}],"volumes":[{"name":"b","persistentVolumeClaim":{"claimName":"pg-backups"}}]}}'
+
 ##@ Secrets
 
 .PHONY: seal
@@ -210,9 +258,9 @@ litellm-key: ## Crea una chiave virtuale LiteLLM per APP (BUDGET=dollari ogni 30
 	@echo "↑ chiave virtuale di $(APP): mettila come ANTHROPIC_API_KEY nel .env dell'app e risigilla"
 
 .PHONY: litellm-rekey
-litellm-rekey: ## Nuova chiave virtuale per APP e risigilla il suo secret (BUDGET, MODELS come litellm-key)
+litellm-rekey: ## Nuova chiave virtuale per APP e risigilla il suo secret (BUDGET, MODELS come litellm-key; KEY_VAR=nome variabile)
 	$(call check-app)
-	@scripts/litellm-rekey.sh $(APP) "$(MODELS)" $(BUDGET)
+	@scripts/litellm-rekey.sh $(APP) "$(MODELS)" $(BUDGET) $(KEY_VAR)
 
 .PHONY: secrets
 secrets: ## Secret decifrati presenti nel namespace di APP (solo i nomi)
