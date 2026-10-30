@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - cluster.yaml
+  - podmonitor.yaml
+  - backup.yaml
+  # Un Database CR per app. Stanno nel namespace del Cluster, non in quello
+  # dell'app: l'operator li cerca lì.
+  - databases/interview.yaml
+  # Password dei ruoli (basic-auth, sigillate da `make pg-user APP=...`).
+  - roles/interview-sealed.yaml

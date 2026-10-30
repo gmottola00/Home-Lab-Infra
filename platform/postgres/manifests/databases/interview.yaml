@@ -1,0 +1,13 @@
+# Database dell'Interview Trainer. Lo schema lo crea l'app (Alembic all'avvio).
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: pg-shared-interview
+  namespace: databases
+spec:
+  cluster:
+    name: pg-shared
+  name: interview
+  owner: interview
+  # Default esplicito: togliere questo CR non fa DROP DATABASE.
+  databaseReclaimPolicy: retain

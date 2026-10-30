@@ -1,0 +1,58 @@
+# Il Postgres condiviso delle app. Endpoint dal cluster:
+#   pg-shared-rw.databases.svc.cluster.local:5432
+#
+# Aggiungere un'app (es. "foo"):
+#   1. un ruolo qui sotto in managed.roles (passwordSecret: pg-role-foo)
+#   2. databases/foo.yaml (Database CR, owner foo) + le due righe in kustomization.yaml
+#   3. make pg-user APP=foo → sigilla roles/foo-sealed.yaml e apps/foo/db-sealed-secret.yaml
+#
+# ATTENZIONE: l'unica StorageClass (local-path) ha reclaimPolicy Delete. Se il
+# Cluster o il suo PVC vengono cancellati, i dati se ne vanno con loro: da qui
+# Prune=false,Delete=false, così ArgoCD non li tocca mai, nemmeno togliendo il
+# file da Git. Restano i dump notturni (backup.yaml).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-shared
+  namespace: databases
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  instances: 1
+  # Pin esplicito: l'operator non aggiorna Postgres da solo. Un cambio di minor
+  # (17.x) è un restart; un cambio di major richiede un upgrade vero.
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.11-standard-trixie
+
+  # Con una sola istanza il PDB (minAvailable 1) bloccherebbe per sempre il
+  # drain del nodo.
+  enablePDB: false
+
+  # Serve al CronJob di backup (pg_dumpall dei ruoli, pg_dump di ogni DB) e a
+  # make pg-psql. Credenziali nel Secret pg-shared-superuser, generato dall'operator.
+  enableSuperuserAccess: true
+
+  storage:
+    storageClass: local-path
+    size: 20Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+  postgresql:
+    parameters:
+      # ~25% del limite di memoria.
+      shared_buffers: 256MB
+
+  # Un ruolo per app, con login e la password nel Secret indicato (tipo
+  # basic-auth, username = nome del ruolo).
+  managed:
+    roles:
+      - name: interview
+        ensure: present
+        login: true
+        passwordSecret:
+          name: pg-role-interview

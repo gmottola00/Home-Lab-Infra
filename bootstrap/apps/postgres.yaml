@@ -1,0 +1,70 @@
+# Postgres condiviso: un solo server nel cluster (pg-shared, gestito da
+# CloudNativePG) dove ogni app dichiara qui il suo database e il suo utente.
+#
+# Due Application, stesso schema multi-source di observability.yaml:
+#   - cnpg-operator: il chart upstream, valori in platform/postgres/
+#   - postgres-base: Cluster, Database, ruoli, backup (platform/postgres/manifests)
+# L'operator porta le CRD (Cluster, Database, ...) che postgres-base usa: da qui
+# le wave e SkipDryRunOnMissingResource sul secondo, che al primo sync può
+# arrivare prima delle CRD e riprova finché non ci sono.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cnpg-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  sources:
+    - repoURL: https://cloudnative-pg.github.io/charts
+      chart: cloudnative-pg
+      targetRevision: 0.29.1
+      helm:
+        valueFiles:
+          - $values/platform/postgres/cnpg-values.yaml
+    - repoURL: git@github.com:gmottola00/Home-Lab-Infra.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Le CRD di CNPG superano il limite dell'annotation last-applied, come
+      # quelle del Prometheus Operator.
+      - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgres-base
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:gmottola00/Home-Lab-Infra.git
+    targetRevision: main
+    path: platform/postgres/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: databases
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
