@@ -326,9 +326,8 @@ helm upgrade --install argocd argo/argo-cd -n argocd -f platform/argocd/values.y
       Ollama sul PC fisso (RTX 5080) via egress tailnet con fallback su Claude
 - [x] **Postgres condiviso**: CloudNativePG, `pg-shared` con un database per app
       dichiarato in Git, dump notturni su volume
-- [ ] **Interview Trainer**: primo utente di `pg-shared`, generazione su GPU e
-      valutazione su Haiku via LiteLLM ← siamo qui (manca la migrazione dei
-      dati da SQLite, poi `replicas: 1`)
+- [x] **Interview Trainer**: primo utente di `pg-shared`, generazione su GPU e
+      valutazione su Haiku via LiteLLM, dati migrati da SQLite
 - [ ] Backup di `pg-shared` fuori dal nodo (S3 / barman-cloud) e LiteLLM su `pg-shared`
 - [ ] **Jarvis (GPU)**: PC fisso come k3s agent on-demand — Wake-on-LAN dal
       mini PC, poi orchestratore + MCP
