@@ -4,14 +4,11 @@ metadata:
   name: interview-backend
   namespace: interview
 spec:
-  # 0 finché i dati locali non sono migrati in pg-shared/interview: all'avvio
-  # l'app crea lo schema e inserisce le categorie, con id che poi
-  # colliderebbero con quelli copiati da SQLite. Dopo la migrazione → 1.
-  #
   # Mai più di 1: generazione e valutazione girano nel processo, e all'avvio
   # l'app marca `error` ogni job rimasto `pending`, convinta che nessun altro
-  # ci stia lavorando.
-  replicas: 0
+  # ci stia lavorando. (I dati di SQLite sono in pg-shared/interview dal
+  # 2026-10-31, make migrate-to-cluster nel repo dell'app.)
+  replicas: 1
   # Per lo stesso motivo niente RollingUpdate: il pod nuovo, partendo mentre il
   # vecchio è ancora vivo, fallirebbe i job che quello sta eseguendo.
   strategy:
