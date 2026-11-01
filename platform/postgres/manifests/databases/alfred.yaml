@@ -1,0 +1,13 @@
+# Database del maggiordomo Alfred. Lo schema lo crea l'app (Alembic all'avvio).
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: pg-shared-alfred
+  namespace: databases
+spec:
+  cluster:
+    name: pg-shared
+  name: alfred
+  owner: alfred
+  # Default esplicito: togliere questo CR non fa DROP DATABASE.
+  databaseReclaimPolicy: retain

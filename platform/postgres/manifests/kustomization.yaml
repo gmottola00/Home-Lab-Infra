@@ -8,5 +8,7 @@ resources:
   # Un Database CR per app. Stanno nel namespace del Cluster, non in quello
   # dell'app: l'operator li cerca lì.
   - databases/interview.yaml
+  - databases/alfred.yaml
   # Password dei ruoli (basic-auth, sigillate da `make pg-user APP=...`).
   - roles/interview-sealed.yaml
+  - roles/alfred-sealed.yaml
