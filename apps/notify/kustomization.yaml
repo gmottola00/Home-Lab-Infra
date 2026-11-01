@@ -27,4 +27,4 @@ configMapGenerator:
 # main; ArgoCD picks up the commit and rolls out. Do not edit newTag by hand.
 images:
   - name: ghcr.io/gmottola00/notify-backend
-    newTag: latest
+    newTag: 08fbc8211c4b03bcd5dae3260769910bead239bd
