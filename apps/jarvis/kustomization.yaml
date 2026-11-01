@@ -39,4 +39,4 @@ images:
   - name: ghcr.io/gmottola00/jarvis-backend
     newTag: 75f3eb69e51b5a76876d799b0f65af998db73e93
   - name: ghcr.io/gmottola00/jarvis-web
-    newTag: 75f3eb69e51b5a76876d799b0f65af998db73e93
+    newTag: 0699c3a84183430f6a082a84de82a7b157bceff9
