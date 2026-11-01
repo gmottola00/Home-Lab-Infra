@@ -1,0 +1,17 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: pg-role-alfred
+  namespace: databases
+spec:
+  encryptedData:
+    password: AgBZWNuMx8z/nfccM+s2X/3yXvIYLdWes8T+dvEojyohVieOUTLQZoJ7AbsKwb2Noq1nL6rP1Be6H+BDPokr5wW6QwLj6R5mW28ipqtrSwqIK6oO9jZ31bE/AHA+zh/6fRIyoUMwe5aYomY5Yosn/RbaK6JTDNY6/jaqhP/oqom2umT+iTGndIDBGJrGvQKQGNOQ4ZfxO0p9u4t+gzuF+rnfbWj2v7/nrkbG0DWKUHVqCsgRDgDb9cch3ygyLldhDnjuQzMYjCFyYYQpGFmTuyqrjgx+6KPdywMTR9UIIO1Uv8+VMisgbaoaYAFq2tzsbpF7Ef3T2r776xML79jqwhlmg+WNA9FJfSjJslhsskqH99woD6Gt0/OGqU94NLd4F1Hzndedi1pS2Vs8dJN4hdoU8TAWlXUUm/6+X5Io6mSAMdcSBLyrn6jvnr8U64aDbWEHyVY24WVh/yaI0nSoReJCHZse0eO9+wpeGv3C4jrZTEVYKewjbZSB28dbUPLrgx8z2iSHbRNLWDZuZlS26kORtlpEBcJGZLKmRE6UnbDKFQudEX7KXynK8zVfQ2rLc6LRtdJ8BbJY4zLGz8MMBqvnaPJIC71Jmm0Euv0kXu0aPgh4Uo5lqd5O1NzWi4XvNRd0T0ELQ/+1xsA0WPO2cL99ug3l62oOZAf6n0NkYTi80BjT3YBDsIsa1lYmIgVYgmEewayN+S4nuRvHDKsHSfVxt2pqAHXFxlBUS6h1cLXnrBNMWQGzhxWtW6gJ
+    username: AgAaWNVTzk147YdqwbGUC2LDvtytNTUIi9o8kR/r72LsAC188vGgTnP9IWNeypLgR4H6DGEiZjbAZc3S9azirOw4zK3ykRqtroZT4/4aq8zufkPbMZqglLngaPokaT0CEALCn6BbZN0lEtlEjbPFAyxQhfQblQHQjp9EmeEcspdbmkxjklMaqA7vQNe+DACakFx/8YMflKOPRchXVZ9xVEpMHjKzVgYKw/7Fqr5M7LbIchszywG2yLajbH8DDdpmtminPNnR9IJeqyLX4FW9Hp3+0BVC/BhDpLct5nq/P/47SfMemmMXYNIE/V4OWnY2iNNT1T+UHPc2DcqmRQkUwx3h+/fqw5a8HzdNcqM9xJtbuYEYaNL+tofjopCPyKCsqx+TPjR5NQWUaXJM+j4P8pSvJuaXQtuWNJt8/Fh3vaQgleAfkDz2+G/G8gHzbP+1+8QuOU3IXkGGZJoJGBTBc33/8ExmNeooiPUwDa3+7YoUmKaXpg0/FUEnkWCi0JnOZ7i0uOfSbM4tJ9E39PTb3BWn7/O2c+r+nsI/usFDhRFZJhV4rKh+IYDf/rfjAKx0mUpyOsbo/Mr1X1Phi9uoHTDoYRyGWuH+IDKgO3qMJV0wCxd8avOxft1FHyIthtPKdLMlSX4nd8vllddK+ogp2kXtnaJH3OM+IXiGUeezzV7KLeaqreGuLc/AGWRveQtivdzwxhCXaB8=
+  template:
+    metadata:
+      labels:
+        cnpg.io/reload: "true"
+      name: pg-role-alfred
+      namespace: databases
+    type: kubernetes.io/basic-auth

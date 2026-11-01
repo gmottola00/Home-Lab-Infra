@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alfred-web
+  namespace: alfred
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alfred-web
+  template:
+    metadata:
+      labels:
+        app: alfred-web
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: web
+          image: ghcr.io/gmottola00/alfred-web:latest
+          env:
+            # nginx inoltra /api qui. Il nome risolve via DNS del cluster
+            # (alfred-backend.alfred.svc.cluster.local, abbreviato nel namespace).
+            - name: BACKEND_UPSTREAM
+              value: alfred-backend:8000
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alfred-web
+  namespace: alfred
+spec:
+  selector:
+    app: alfred-web
+  ports:
+    - port: 80
+      targetPort: 80
