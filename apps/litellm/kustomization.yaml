@@ -6,9 +6,11 @@ resources:
   - litellm.yaml
   - ollama-egress.yaml
   - ingress.yaml
+  # Ruolo in sola lettura per la vista gateway di Jarvis (solo funzioni, nessuna tabella).
+  - jarvis-reader-job.yaml
   # Encrypted with kubeseal — safe to commit; only the in-cluster controller
   # can decrypt them. Keys: LITELLM_MASTER_KEY, LITELLM_SALT_KEY,
-  # ANTHROPIC_API_KEY, POSTGRES_PASSWORD, DATABASE_URL.
+  # ANTHROPIC_API_KEY, POSTGRES_PASSWORD, DATABASE_URL, JARVIS_READER_PASSWORD.
   - sealed-secret.yaml
 
 # config.yaml diventa la ConfigMap litellm-config-<hash>: cambiare un modello o
@@ -18,3 +20,8 @@ configMapGenerator:
     namespace: litellm
     files:
       - config.yaml
+  # Lo script SQL del Job jarvis-reader: un cambiamento produce un nome nuovo.
+  - name: litellm-jarvis-reader-sql
+    namespace: litellm
+    files:
+      - jarvis-reader.sql
