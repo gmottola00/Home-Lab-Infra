@@ -230,6 +230,27 @@ pg-backups: ## Elenco dei dump sul volume pg-backups
 	@kubectl -n databases run pg-backups-ls --rm -i --quiet --restart=Never --image=busybox:1.37 \
 		--overrides='{"spec":{"containers":[{"name":"ls","image":"busybox:1.37","command":["sh","-c","cd /backups && du -sh 20* 2>/dev/null; ls -l 20*/ 2>/dev/null || echo nessun backup"],"volumeMounts":[{"name":"b","mountPath":"/backups"}]}],"volumes":[{"name":"b","persistentVolumeClaim":{"claimName":"pg-backups"}}]}}'
 
+##@ Notifiche (notify-hub)
+
+.PHONY: notify-vapid
+notify-vapid: ## Chiave VAPID dell'hub, sigillata (rigenerarla invalida TUTTE le sottoscrizioni)
+	@scripts/notify-vapid.sh
+
+.PHONY: notify-token
+notify-token: ## Token di APP per l'hub: sigilla apps/APP/notify-sealed-secret.yaml e scrive l'hash in NOTIFY_APPS
+	$(call check-app)
+	@scripts/notify-token.sh $(APP)
+
+.PHONY: notify-subs
+notify-subs: ## Dispositivi iscritti per app (dal DB notify)
+	@kubectl -n databases exec -i $(PG_PRIMARY) -c postgres -- psql -d notify \
+		-c "SELECT app, label, created_at, last_success_at, failures FROM subscriptions ORDER BY app, id;"
+
+.PHONY: ghcr-pull
+ghcr-pull: ## Pull secret GHCR per APP, risigillato da un namespace esistente (FROM=alfred)
+	$(call check-app)
+	@scripts/ghcr-pull.sh $(APP) $(or $(FROM),alfred)
+
 ##@ Secrets
 
 .PHONY: seal

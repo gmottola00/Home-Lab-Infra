@@ -37,6 +37,9 @@ spec:
             # rende durevoli anche checkpoint e approvazioni in sospeso.
             - secretRef:
                 name: alfred-db
+            # NOTIFY_TOKEN per notify-hub (make notify-token APP=alfred).
+            - secretRef:
+                name: alfred-notify
           # Le migrazioni girano nel lifespan prima che /health risponda: una
           # migrazione fallita = pod mai Ready, e il vecchio dato resta intatto.
           readinessProbe:

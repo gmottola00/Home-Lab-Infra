@@ -1,0 +1,26 @@
+# L'hub non ha Ingress e accetta traffico solo dalle app che mandano notifiche.
+# Il token resta il vero controllo (identifica l'app); questa policy toglie di
+# mezzo tutto il resto del cluster. k3s applica le NetworkPolicy di default.
+# Le probe del kubelet partono dal nodo stesso, che kube-router lascia sempre
+# passare verso i pod locali: non serve una regola per loro.
+# Una nuova app che manda notifiche → il suo namespace nella lista qui sotto,
+# più `make notify-token APP=<app>`.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: notify-backend
+  namespace: notify
+spec:
+  podSelector:
+    matchLabels:
+      app: notify-backend
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - key: kubernetes.io/metadata.name
+                operator: In
+                values: [alfred, jarvis]
+      ports:
+        - port: 8000
