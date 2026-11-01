@@ -17,8 +17,9 @@ configMapGenerator:
     namespace: notify
     literals:
       # Claim `sub` del JWT VAPID: un contatto per i push service se qualcosa
-      # va storto. mailto: o https:, Apple rifiuta placeholder e localhost.
-      - NOTIFY_VAPID_SUBJECT=https://github.com/gmottola00
+      # va storto. mailto:nome@dominio o https://host SENZA path: py_vapid
+      # rifiuta il resto (l'hub non parte), Apple rifiuta placeholder e localhost.
+      - NOTIFY_VAPID_SUBJECT=mailto:gianmarcomottola00@gmail.com
       # App ammesse: nome → sha256 del token. Gli hash non sono segreti; i token
       # stanno solo nei secret delle app. Lo aggiorna `make notify-token APP=...`.
       - NOTIFY_APPS={"alfred":"f15a7f8f8af77f23b22a9876796e0e9e72be3f17bae9c56ce9f58e2537cecaba"}
