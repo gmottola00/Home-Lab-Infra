@@ -10,6 +10,8 @@ resources:
   # can decrypt them.
   - sealed-secret.yaml
   - ghcr-pull-secret.yaml
+  # jarvis-notify: NOTIFY_TOKEN per notify-hub (make notify-token APP=jarvis)
+  - notify-sealed-secret.yaml
 # Configurazione non segreta. Il generator aggiunge al nome un hash del
 # contenuto (jarvis-config-<hash>) e aggiorna i riferimenti nel Deployment:
 # un valore cambiato produce un pod template diverso, quindi un rollout. Una
@@ -33,6 +35,8 @@ configMapGenerator:
       - JARVIS_PROMETHEUS_URL=http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
       - JARVIS_LOKI_URL=http://loki.monitoring.svc.cluster.local:3100
       - JARVIS_ALERTMANAGER_URL=http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093
+      # notify-hub, solo dentro il cluster (NetworkPolicy in apps/notify).
+      - JARVIS_NOTIFY_URL=http://notify-backend.notify.svc.cluster.local:8000
 # CI (Jarvis repo workflows) bumps newTag to the commit SHA on every push to
 # main; ArgoCD picks up the commit and rolls out. Do not edit newTag by hand.
 images:

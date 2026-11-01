@@ -32,6 +32,9 @@ spec:
                 name: jarvis-config
             - secretRef:
                 name: jarvis-secrets
+            # NOTIFY_TOKEN per notify-hub (make notify-token APP=jarvis).
+            - secretRef:
+                name: jarvis-notify
           readinessProbe:
             httpGet:
               path: /health

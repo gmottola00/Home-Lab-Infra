@@ -22,7 +22,7 @@ configMapGenerator:
       - NOTIFY_VAPID_SUBJECT=mailto:gianmarcomottola00@gmail.com
       # App ammesse: nome → sha256 del token. Gli hash non sono segreti; i token
       # stanno solo nei secret delle app. Lo aggiorna `make notify-token APP=...`.
-      - NOTIFY_APPS={"alfred":"f15a7f8f8af77f23b22a9876796e0e9e72be3f17bae9c56ce9f58e2537cecaba"}
+      - NOTIFY_APPS={"alfred":"f15a7f8f8af77f23b22a9876796e0e9e72be3f17bae9c56ce9f58e2537cecaba","jarvis":"fc6f120dd356442fd215291a91e8ac0f6d193157143d24e7b7ee77f7ded9f5a9"}
       - NOTIFY_LOG_JSON=true
 # CI (repo Notify-Hub, ci.yml) bumps newTag to the commit SHA on every push to
 # main; ArgoCD picks up the commit and rolls out. Do not edit newTag by hand.
