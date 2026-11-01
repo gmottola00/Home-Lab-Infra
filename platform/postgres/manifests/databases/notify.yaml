@@ -1,0 +1,13 @@
+# Sottoscrizioni push di notify-hub. Lo schema lo crea l'app (Alembic all'avvio).
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: pg-shared-notify
+  namespace: databases
+spec:
+  cluster:
+    name: pg-shared
+  name: notify
+  owner: notify
+  # Default esplicito: togliere questo CR non fa DROP DATABASE.
+  databaseReclaimPolicy: retain

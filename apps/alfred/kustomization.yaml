@@ -11,6 +11,8 @@ resources:
   - sealed-secret.yaml
   # alfred-db: DATABASE_URL verso pg-shared (make pg-user APP=alfred)
   - db-sealed-secret.yaml
+  # alfred-notify: NOTIFY_TOKEN per notify-hub (make notify-token APP=alfred)
+  - notify-sealed-secret.yaml
   - ghcr-pull-secret.yaml
 configMapGenerator:
   - name: alfred-config
@@ -23,6 +25,8 @@ configMapGenerator:
       - ALFRED_CATEGORIZER_MODEL=claude-haiku-4-5
       - ALFRED_TIMEZONE=Europe/Rome
       - ALFRED_LOG_JSON=true
+      # notify-hub, solo dentro il cluster (NetworkPolicy in apps/notify).
+      - ALFRED_NOTIFY_URL=http://notify-backend.notify.svc.cluster.local:8000
 # CI (Alfred repo workflows) bumps newTag to the commit SHA on every push to
 # main; ArgoCD picks up the commit and rolls out. Do not edit newTag by hand.
 images:

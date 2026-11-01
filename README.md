@@ -258,6 +258,20 @@ pg_restore -h pg-shared-rw -U postgres -d <db> --clean --if-exists /backups/<dat
 LiteLLM resta per ora sul suo Postgres (`apps/litellm/postgres.yaml`); il
 trasloco su `pg-shared` è un passo successivo.
 
+## Notifiche (notify-hub)
+
+`apps/notify/`: il servizio Web Push del lab (codice nel repo `Notify-Hub`). Tiene la chiave VAPID e le sottoscrizioni per app su `pg-shared/notify`, e consegna ad Apple, Mozilla e Google. **Nessun Ingress:** una NetworkPolicy ammette solo i namespace `alfred` e `jarvis`; il token identifica l'app, e in Git ne sta solo lo sha256 (`NOTIFY_APPS`).
+
+Primo deploy:
+
+```bash
+make pg-user APP=notify          # ruolo + DATABASE_URL
+make notify-vapid                # chiave VAPID (rigenerarla invalida TUTTE le sottoscrizioni)
+make ghcr-pull APP=notify        # pull secret copiato da alfred
+make notify-token APP=alfred     # NOTIFY_TOKEN di Alfred + hash in NOTIFY_APPS
+make notify-subs                 # dispositivi iscritti
+```
+
 ## Observability
 
 Metriche e log di tutto il cluster, su `https://grafana.<tailnet>.ts.net`
@@ -328,6 +342,10 @@ helm upgrade --install argocd argo/argo-cd -n argocd -f platform/argocd/values.y
       dichiarato in Git, dump notturni su volume
 - [x] **Interview Trainer**: primo utente di `pg-shared`, generazione su GPU e
       valutazione su Haiku via LiteLLM, dati migrati da SQLite
+- [x] **Notifiche (notify-hub)**: Web Push per le app del lab, una chiave VAPID
+      e un token per app, niente Ingress; primo client Alfred
+- [ ] Regole di notifica in Alfred, client in Jarvis, webhook di Alertmanager
+      verso notify-hub
 - [ ] Backup di `pg-shared` fuori dal nodo (S3 / barman-cloud) e LiteLLM su `pg-shared`
 - [ ] **Jarvis (GPU)**: PC fisso come k3s agent on-demand — Wake-on-LAN dal
       mini PC, poi orchestratore + MCP

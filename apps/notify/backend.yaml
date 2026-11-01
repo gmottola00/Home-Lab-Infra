@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notify-backend
+  namespace: notify
+spec:
+  # Senza stato in memoria: le sottoscrizioni sono su pg-shared. Una replica
+  # basta per un telefono e due app.
+  replicas: 1
+  # Niente RollingUpdate: le migrazioni Alembic girano nel lifespan, e due pod
+  # insieme le lancerebbero in parallelo sullo stesso database.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: notify-backend
+  template:
+    metadata:
+      labels:
+        app: notify-backend
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: backend
+          image: ghcr.io/gmottola00/notify-backend:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            # Subject VAPID e app ammesse (hash dei token): configMapGenerator,
+            # un valore cambiato → rollout.
+            - configMapRef:
+                name: notify-config
+            # NOTIFY_VAPID_PRIVATE_KEY (make notify-vapid).
+            - secretRef:
+                name: notify-secrets
+            # DATABASE_URL verso pg-shared (make pg-user APP=notify).
+            - secretRef:
+                name: notify-db
+          # /health non tocca né il DB né i push service. Migrazioni e chiave
+          # VAPID si caricano prima che risponda: chiave rotta o migrazione
+          # fallita = pod mai Ready.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 20m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notify-backend
+  namespace: notify
+spec:
+  selector:
+    app: notify-backend
+  ports:
+    - port: 8000
+      targetPort: 8000

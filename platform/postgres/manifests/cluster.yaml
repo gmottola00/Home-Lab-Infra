@@ -61,3 +61,8 @@ spec:
         login: true
         passwordSecret:
           name: pg-role-alfred
+      - name: notify
+        ensure: present
+        login: true
+        passwordSecret:
+          name: pg-role-notify
