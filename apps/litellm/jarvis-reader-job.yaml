@@ -1,0 +1,52 @@
+# Crea/aggiorna il ruolo jarvis_reader e le funzioni jarvis_ro.* (vedi
+# jarvis-reader.sql). Hook di Sync: gira a ogni sync di ArgoCD, lo script è
+# idempotente. BeforeHookCreation cancella il Job precedente prima di ricrearlo.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: litellm-jarvis-reader
+  namespace: litellm
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: psql
+          image: postgres:17.6-alpine
+          command: ["sh", "-c"]
+          # Aspetta Postgres (al primo deploy parte insieme al Job), poi applica.
+          args:
+            - |
+              until pg_isready -h litellm-postgres -U litellm -q; do sleep 2; done
+              psql -h litellm-postgres -U litellm -d litellm -X \
+                -v ON_ERROR_STOP=1 -v reader_password="$JARVIS_READER_PASSWORD" \
+                -f /sql/jarvis-reader.sql
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-secrets
+                  key: POSTGRES_PASSWORD
+            - name: JARVIS_READER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-secrets
+                  key: JARVIS_READER_PASSWORD
+          volumeMounts:
+            - name: sql
+              mountPath: /sql
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: sql
+          configMap:
+            name: litellm-jarvis-reader-sql
