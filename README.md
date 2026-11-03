@@ -19,7 +19,7 @@ dopo il bootstrap. Obiettivo: infra comune per le mie app e palestra di architet
 
 - [Stack](#stack) · [Architettura](#architettura) · [Flusso di deploy](#flusso-di-deploy-gitops) · [Struttura](#struttura)
 - [Comandi quotidiani](#comandi-quotidiani) · [Bootstrap](#bootstrap-del-cluster-una-volta-sola) · [Nuova app](#aggiungere-una-nuova-app-il-pattern)
-- [Gateway LLM](#gateway-llm-litellm) · [Postgres](#postgres-condiviso-cloudnativepg) · [Notifiche](#notifiche-notify-hub) · [Observability](#observability)
+- [Gateway LLM](#gateway-llm-litellm) · [Postgres](#postgres-condiviso-cloudnativepg) · [Notifiche](#notifiche-notify-hub) · [Zigbee e GPU](#zigbee-e-gpu-iot) · [Observability](#observability)
 - [Adattarlo al tuo setup](#adattarlo-al-tuo-setup) · [Roadmap](#fasi-future) · [Licenza](#licenza)
 
 ## Stack
@@ -33,6 +33,7 @@ dopo il bootstrap. Obiettivo: infra comune per le mie app e palestra di architet
 | Database | CloudNativePG (`pg-shared`), Supabase cloud per alcune app |
 | LLM | LiteLLM (chiavi virtuali, budget) → Claude + Ollama locale su GPU |
 | Osservabilità | kube-prometheus-stack, Loki, Alloy, Grafana |
+| IoT | Zigbee2MQTT + Mosquitto, dongle Sonoff ZBDongle-E, prese Sonoff S60ZBTPF |
 | CI/CD | GitHub Actions nei repo delle app → GHCR → bump del tag qui |
 
 ## Architettura
@@ -58,6 +59,11 @@ flowchart LR
             notify["notify-hub<br/>no Ingress"]
         end
 
+        subgraph iot["IoT"]
+            z2m["Zigbee2MQTT"]
+            mqtt["Mosquitto"]
+        end
+
         subgraph platform["Piattaforma"]
             argo["ArgoCD"]
             sealed["Sealed Secrets"]
@@ -67,7 +73,8 @@ flowchart LR
         end
 
         ts --> trip & tick & jarvis & alfred & interview
-        ts --> argo & obs & litellm
+        ts --> argo & obs & litellm & z2m
+        z2m <--> mqtt
     end
 
     git[("GitHub<br/>Home-Lab-Infra")] -- sync --> argo
@@ -75,6 +82,8 @@ flowchart LR
     supa[("Supabase cloud")] --- trip & tick
     litellm --> anthropic["api.anthropic.com"]
     litellm -- "egress tailnet" --> ollama["Ollama<br/>PC con RTX 5080"]
+    z2m -. "Zigbee (dongle USB)" .-> plug["presa gpu-plug"]
+    plug -. "corrente" .-> ollama
 ```
 
 | Hostname (`<nome>.<tailnet>.ts.net`) | Servizio |
@@ -84,6 +93,7 @@ flowchart LR
 | `litellm` | UI di LiteLLM (chiavi virtuali, spesa) |
 | `trip-ai` · `tickup` · `jarvis` · `alfred` | PWA web, `/api/*` → backend |
 | `interview` | Interview Trainer |
+| `zigbee` | UI di Zigbee2MQTT |
 
 **Dove stanno i dati:** Supabase (cloud) per Trip-AI e TickUp; `pg-shared`
 in-cluster per Interview Trainer, Alfred e notify-hub; LiteLLM ha ancora il suo
@@ -127,12 +137,12 @@ al cluster = aggiungere un YAML lì e pushare.
 flowchart TD
     root["root<br/>bootstrap/root-app.yaml<br/><i>kubectl apply, una volta</i>"] --> dir["bootstrap/apps/*.yaml"]
 
-    dir --> a1["trip-ai"] & a2["tickup"] & a3["jarvis"] & a4["alfred"] & a5["interview"] & a6["notify"]
+    dir --> a1["trip-ai"] & a2["tickup"] & a3["jarvis"] & a4["alfred"] & a5["interview"] & a6["notify"] & a7["iot"]
     dir --> p1["litellm"]
     dir --> p2["postgres<br/><i>multi-source</i>"]
     dir --> p3["observability<br/><i>multi-source</i>"]
 
-    a1 & a2 & a3 & a4 & a5 & a6 & p1 -.-> k["apps/#lt;nome#gt;/<br/>kustomize"]
+    a1 & a2 & a3 & a4 & a5 & a6 & a7 & p1 -.-> k["apps/#lt;nome#gt;/<br/>kustomize"]
     p2 -.-> pc["chart cloudnative-pg<br/>+ platform/postgres/"]
     p3 -.-> oc["chart upstream<br/>+ platform/observability/"]
 
@@ -158,6 +168,7 @@ apps/
   tickup/                   # come trip-ai (Supabase cloud come DB)
   alfred/                   # assistente personale, client di notify-hub
   notify/                   # notify-hub: Web Push per le app del lab
+  iot/                      # Zigbee2MQTT + Mosquitto: prese smart, accensione della GPU
 scripts/                    # helper richiamati dal Makefile (seal, pg-user, rekey, ...)
 legacy/                     # vecchio draft Caddy + docker-compose (riferimento storico)
 ```
@@ -464,6 +475,49 @@ make notify-token APP=alfred     # NOTIFY_TOKEN di Alfred + hash in NOTIFY_APPS
 make notify-subs                 # dispositivi iscritti
 ```
 
+## Zigbee e GPU (`iot`)
+
+Un dongle **Sonoff ZBDongle-E** sul nodo e due prese **Sonoff S60ZBTPF** (misurano i watt):
+
+| Presa | Alimenta | Regola |
+|---|---|---|
+| `gpu-plug` | PC fisso `pop-os` (RTX 5080, Ollama) | si accende e spegne con `make gpu-on` / `make gpu-off` |
+| `homelab-plug` | **questo nodo** | ⚠️ **mai spenta**: il cluster cadrebbe e niente potrebbe riaccenderlo. Solo misura |
+
+Zigbee2MQTT (`apps/iot/zigbee2mqtt.yaml`) apre la seriale con un `hostPath` sul
+path `/dev/serial/by-id/...` e pubblica su Mosquitto (`apps/iot/mosquitto.yaml`),
+che resta dentro il cluster. La UI è su `https://zigbee.<tailnet>.ts.net`.
+`config/configuration.yaml` viene copiato sulla PVC a ogni avvio, quindi le
+impostazioni si cambiano in Git. Nomi e opzioni dei device stanno invece in
+`devices.yaml` sulla PVC. La network key è nel Secret sigillato `iot-secrets`:
+se la PVC si perde, la rete si ricostruisce senza riassociare le prese.
+
+```bash
+make iot-secrets      # password MQTT (+ network key al primo giro, poi la riusa)
+make zigbee-pair      # join aperto 2 minuti → tasto della presa premuto ~5s
+make gpu-status       # presa, watt, pop-os sulla tailnet, Ollama
+make gpu-on           # presa ON → il BIOS accende il PC → aspetta Ollama
+make gpu-off          # shutdown via SSH → watt sotto soglia → presa OFF
+```
+
+`gpu-off` non stacca mai la corrente a un PC acceso: se lo shutdown via SSH
+fallisce o i watt non scendono entro 3 minuti, la presa resta ON.
+
+**Setup una tantum su pop-os:**
+
+1. BIOS: *Restore on AC Power Loss* → **Power On** (presa ON = boot).
+2. Sul nodo: `ssh-keygen -t ed25519 -N "" -C gpu-poweroff -f ~/.ssh/gpu-poweroff`
+3. Su pop-os, in `~/.ssh/authorized_keys` (la chiave sa fare solo questo):
+   `command="sudo /usr/bin/systemctl poweroff",restrict ssh-ed25519 AAAA... gpu-poweroff`
+4. Su pop-os, `sudo visudo -f /etc/sudoers.d/gpu-poweroff`:
+   `gmottola ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff`
+5. Dopo il pairing, dalla UI: rinomina le prese in `gpu-plug` / `homelab-plug`
+   e imposta *power-on behavior* `off` per la GPU e `on` per il nodo (dopo un
+   blackout il nodo riparte da solo, la GPU no).
+
+Home Assistant in futuro: `homeassistant.enabled: true` nel config, un utente
+MQTT in più e il suo namespace in `apps/iot/networkpolicy.yaml`.
+
 ## Observability
 
 Metriche e log di tutto il cluster, su `https://grafana.<tailnet>.ts.net`
@@ -560,8 +614,11 @@ helm upgrade --install argocd argo/argo-cd -n argocd -f platform/argocd/values.y
       e un token per app, niente Ingress; primo client Alfred
 - [ ] Regole di notifica in Alfred, webhook di Alertmanager verso notify-hub
 - [ ] Backup di `pg-shared` fuori dal nodo (S3 / barman-cloud) e LiteLLM su `pg-shared`
-- [ ] **Jarvis (GPU)**: PC fisso come k3s agent on-demand — Wake-on-LAN dal
-      mini PC, poi orchestratore + MCP
+- [x] **Zigbee + accensione GPU**: Zigbee2MQTT + Mosquitto, presa smart al posto
+      del Wake-on-LAN, `make gpu-on` / `gpu-off` con shutdown pulito
+- [ ] Home Assistant come client MQTT di Zigbee2MQTT
+- [ ] **Jarvis (GPU)**: accensione GPU come tool di Jarvis, poi PC fisso come
+      k3s agent on-demand, orchestratore + MCP
 - [ ] Auto-gestione della piattaforma: ArgoCD/operator/sealed-secrets adottati
       nel loop GitOps (app-of-apps anche per platform/)
 

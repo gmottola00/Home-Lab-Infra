@@ -1,0 +1,123 @@
+# Zigbee2MQTT: parla con il dongle USB sul nodo e pubblica i device su MQTT.
+#
+# Device associati: gpu-plug (PC con la RTX 5080) e homelab-plug (QUESTO nodo).
+# homelab-plug NON va mai spenta: il nodo si spegnerebbe da solo e con lui il
+# dongle, e niente potrebbe riaccenderlo. Serve solo a misurare i watt.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zigbee2mqtt-data
+  namespace: iot
+  annotations:
+    # database.db + coordinator_backup.json: perderli = riassociare i device.
+    # reclaimPolicy Delete: senza questo un prune cancellerebbe il volume.
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zigbee2mqtt
+  namespace: iot
+spec:
+  replicas: 1
+  # Una sola istanza può aprire la seriale: mai due pod insieme.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: zigbee2mqtt
+  template:
+    metadata:
+      labels:
+        app: zigbee2mqtt
+    spec:
+      # Il dongle è attaccato fisicamente a questo nodo.
+      nodeSelector:
+        kubernetes.io/hostname: gmottola-venus-series
+      initContainers:
+        # configuration.yaml viene da Git a ogni avvio (vedi config/configuration.yaml).
+        # Lo si copia invece di montarlo: Z2M ci scrive sopra e un ConfigMap è read-only.
+        - name: config
+          image: koenkk/zigbee2mqtt:2.14.2
+          command: ["sh", "-c", "cp /config/configuration.yaml /app/data/configuration.yaml"]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: data
+              mountPath: /app/data
+      containers:
+        - name: zigbee2mqtt
+          image: koenkk/zigbee2mqtt:2.14.2
+          env:
+            - name: TZ
+              value: Europe/Rome
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            # Accesso alla seriale: su k3s la via più semplice. L'alternativa
+            # (un device plugin) è un componente in più per un solo device.
+            privileged: true
+          readinessProbe:
+            tcpSocket: { port: http }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: http }
+            # Il primo avvio forma la rete: può metterci un po'.
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            # network_key e mqtt_password, risolti dai `!secret` del config.
+            # Z2M lo riscrive solo se il valore cambia: read-only va bene.
+            - name: secrets
+              mountPath: /app/data/secret.yaml
+              subPath: secret.yaml
+              readOnly: true
+            - name: dongle
+              mountPath: /dev/zigbee
+      volumes:
+        - name: config
+          configMap:
+            name: zigbee2mqtt-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: zigbee2mqtt-data
+        - name: secrets
+          secret:
+            secretName: iot-secrets
+            items:
+              - key: secret.yaml
+                path: secret.yaml
+        - name: dongle
+          hostPath:
+            # Path by-id: resta lo stesso anche se il dongle diventa ttyUSB1.
+            path: /dev/serial/by-id/usb-Itead_Sonoff_Zigbee_3.0_USB_Dongle_Plus_V2_361468a18c78f011995daae70ba521c7-if00-port0
+            type: CharDevice
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zigbee2mqtt
+  namespace: iot
+spec:
+  selector:
+    app: zigbee2mqtt
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
