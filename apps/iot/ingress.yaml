@@ -1,0 +1,19 @@
+# Tailscale Operator ingress: crea un device "zigbee" sulla tailnet con
+# certificato Let's Encrypt → https://zigbee.<tailnet>.ts.net (UI di Zigbee2MQTT).
+# La tailnet è l'unico controllo d'accesso, come per le altre app.
+# Il broker MQTT invece NON è esposto: resta dentro il cluster.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: zigbee
+  namespace: iot
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: zigbee2mqtt
+      port:
+        number: 80
+  tls:
+    - hosts:
+        - zigbee

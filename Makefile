@@ -251,6 +251,30 @@ ghcr-pull: ## Pull secret GHCR per APP, risigillato da un namespace esistente (F
 	$(call check-app)
 	@scripts/ghcr-pull.sh $(APP) $(or $(FROM),alfred)
 
+##@ IoT (Zigbee2MQTT + GPU)
+
+.PHONY: gpu-status
+gpu-status: ## Presa della GPU (stato, watt), pop-os sulla tailnet, Ollama
+	@scripts/gpu-power.sh status
+
+.PHONY: gpu-on
+gpu-on: ## Accende il PC con la GPU (presa ON) e aspetta che Ollama risponda
+	@scripts/gpu-power.sh on
+
+.PHONY: gpu-off
+gpu-off: ## Shutdown pulito di pop-os via SSH, poi presa OFF quando i watt sono a zero
+	@scripts/gpu-power.sh off
+
+.PHONY: zigbee-pair
+zigbee-pair: ## Apre il join della rete Zigbee per 2 minuti
+	@kubectl -n iot exec deploy/mosquitto -c mosquitto -- sh -c \
+		'mosquitto_pub -h localhost -u cli -P "$$CLI_PASSWORD" -t zigbee2mqtt/bridge/request/permit_join -m "{\"time\":120}"'
+	@echo "join aperto per 120s: tieni premuto il tasto della presa ~5s finché il LED lampeggia"
+
+.PHONY: iot-secrets
+iot-secrets: ## Password MQTT (+ network key Zigbee al primo giro), sigillate in apps/iot/sealed-secret.yaml
+	@scripts/iot-secrets.sh
+
 ##@ Secrets
 
 .PHONY: seal

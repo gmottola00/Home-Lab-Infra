@@ -1,0 +1,53 @@
+# Zigbee2MQTT 2.x. Questo file è la sorgente: l'initContainer lo copia sulla PVC
+# a OGNI avvio, quindi le modifiche fatte dalla UI in "Settings" spariscono al
+# riavvio successivo. Si cambia qui e si pusha.
+#
+# Quello che invece vive solo sulla PVC (e la UI può modificare liberamente):
+# devices.yaml / groups.yaml (nomi e opzioni dei device), database.db,
+# coordinator_backup.json.
+version: 5
+
+mqtt:
+  server: mqtt://mosquitto.iot.svc.cluster.local:1883
+  base_topic: zigbee2mqtt
+  user: z2m
+  # Da secret.yaml (Secret iot-secrets, `make iot-secrets`).
+  password: "!secret mqtt_password"
+
+serial:
+  # Sonoff ZBDongle-E (EFR32MG21): driver ember, non zstack.
+  port: /dev/zigbee
+  adapter: ember
+  baudrate: 115200
+  rtscts: false
+
+advanced:
+  # Parametri della rete. PAN ID ed ext PAN ID non sono segreti ma devono
+  # essere stabili: se si perdono, si perde la rete. La network key è il
+  # segreto vero (permette di decifrare il traffico): in Git solo sigillata.
+  # Cambiare uno di questi tre valori = riassociare TUTTI i device.
+  pan_id: 8153
+  ext_pan_id: [113, 8, 3, 231, 17, 124, 134, 193]
+  channel: 25
+  network_key: "!secret network_key"
+  log_output: [console]
+  log_level: info
+
+frontend:
+  enabled: true
+  port: 8080
+
+# Pronto per dopo: con HA basta metterlo a true (HA legge i device via
+# MQTT discovery dal broker).
+homeassistant:
+  enabled: false
+
+# Il join è chiuso di default (in 2.x non è più un'opzione di config): si apre
+# per 2 minuti con `make zigbee-pair` o dalla UI.
+
+device_options:
+  # Lo stato resta sul broker: chi si iscrive lo riceve subito (gpu-power.sh).
+  retain: true
+
+devices: devices.yaml
+groups: groups.yaml

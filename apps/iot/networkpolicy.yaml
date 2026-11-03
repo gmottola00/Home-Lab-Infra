@@ -1,0 +1,25 @@
+# Il broker accetta connessioni solo dal namespace iot (Zigbee2MQTT). Le
+# password restano il vero controllo; questa policy toglie di mezzo il resto
+# del cluster. `kubectl exec` (scripts/gpu-power.sh) non passa dalla rete del
+# pod e non è toccato.
+# Un nuovo client MQTT (es. Home Assistant) → il suo namespace nella lista
+# qui sotto e un utente in più in mosquitto.yaml.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mosquitto
+  namespace: iot
+spec:
+  podSelector:
+    matchLabels:
+      app: mosquitto
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - key: kubernetes.io/metadata.name
+                operator: In
+                values: [iot]
+      ports:
+        - port: 1883

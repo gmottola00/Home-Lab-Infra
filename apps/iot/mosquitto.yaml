@@ -1,0 +1,118 @@
+# Mosquitto: il broker MQTT su cui Zigbee2MQTT pubblica lo stato dei device e
+# riceve i comandi. Utenti: z2m (Zigbee2MQTT) e cli (make gpu-*, zigbee-pair).
+# Un client futuro (Home Assistant) = un utente in più nell'initContainer e il
+# suo namespace in networkpolicy.yaml.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mosquitto-data
+  namespace: iot
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mosquitto
+  namespace: iot
+spec:
+  replicas: 1
+  # RWO su local-path: il pod vecchio deve sparire prima che parta il nuovo.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mosquitto
+  template:
+    metadata:
+      labels:
+        app: mosquitto
+    spec:
+      securityContext:
+        runAsUser: 1883
+        runAsGroup: 1883
+        runAsNonRoot: true
+      initContainers:
+        # Il password file vuole gli hash di mosquitto_passwd, non le password:
+        # lo si genera qui dalla stessa immagine, così in Git c'è solo il Secret.
+        - name: passwd
+          image: eclipse-mosquitto:2.0.22
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              f=/mosquitto/auth/passwd
+              : > "$f" && chmod 0600 "$f"
+              mosquitto_passwd -b "$f" z2m "$Z2M_PASSWORD"
+              mosquitto_passwd -b "$f" cli "$CLI_PASSWORD"
+          env:
+            - name: Z2M_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: iot-secrets, key: Z2M_PASSWORD }
+            - name: CLI_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: iot-secrets, key: CLI_PASSWORD }
+          volumeMounts:
+            - name: auth
+              mountPath: /mosquitto/auth
+      containers:
+        - name: mosquitto
+          image: eclipse-mosquitto:2.0.22
+          ports:
+            - name: mqtt
+              containerPort: 1883
+          env:
+            # Per `kubectl exec ... mosquitto_sub -u cli -P "$CLI_PASSWORD"`:
+            # la password non esce mai dal cluster (scripts/gpu-power.sh).
+            - name: CLI_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: iot-secrets, key: CLI_PASSWORD }
+          readinessProbe:
+            tcpSocket: { port: mqtt }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: mqtt }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: config
+              mountPath: /mosquitto/config/mosquitto.conf
+              subPath: mosquitto.conf
+            - name: auth
+              mountPath: /mosquitto/auth
+            - name: data
+              mountPath: /mosquitto/data
+      volumes:
+        - name: config
+          configMap:
+            name: mosquitto-config
+        - name: auth
+          emptyDir:
+            medium: Memory
+        - name: data
+          persistentVolumeClaim:
+            claimName: mosquitto-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosquitto
+  namespace: iot
+spec:
+  selector:
+    app: mosquitto
+  ports:
+    - name: mqtt
+      port: 1883
+      targetPort: mqtt

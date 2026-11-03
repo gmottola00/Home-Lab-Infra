@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - mosquitto.yaml
+  - zigbee2mqtt.yaml
+  - ingress.yaml
+  - networkpolicy.yaml
+  # Encrypted with kubeseal — safe to commit; only the in-cluster controller
+  # can decrypt them.
+  # iot-secrets: secret.yaml (network_key + mqtt_password per Z2M),
+  # Z2M_PASSWORD, CLI_PASSWORD (make iot-secrets)
+  - sealed-secret.yaml
+configMapGenerator:
+  # Il nome generato cambia col contenuto: modificare un file = rollout del pod.
+  - name: zigbee2mqtt-config
+    namespace: iot
+    files:
+      - config/configuration.yaml
+  - name: mosquitto-config
+    namespace: iot
+    files:
+      - config/mosquitto.conf
