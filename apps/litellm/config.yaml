@@ -3,6 +3,7 @@
 #
 # Convenzione sui nomi, su cui conta Jarvis: "claude-*" sono modelli Anthropic
 # (chiamati via pass-through con l'API nativa), "local/*" sono modelli Ollama.
+# "voyage-*" sono modelli di embedding (solo /v1/embeddings).
 
 model_list:
   # --- Claude (la sola chiave vera sta in litellm-secrets) ------------------
@@ -43,6 +44,16 @@ model_list:
       api_base: http://ollama-gpu.litellm.svc.cluster.local:11434
       timeout: 120
       stream_timeout: 30
+
+  # --- Embedding: Voyage AI (VOYAGE_API_KEY in litellm-secrets) -------------
+  # Specializzato su testi finanziari, 1024 dimensioni. Usato da FiscoAI, che
+  # passa input_type (document/query) a ogni chiamata.
+  - model_name: voyage-finance-2
+    litellm_params:
+      model: voyage/voyage-finance-2
+      api_key: os.environ/VOYAGE_API_KEY
+    model_info:
+      mode: embedding
 
 router_settings:
   # Nessun fallback local/* → Claude qui: sarebbe silenzioso, e chi sceglie un
