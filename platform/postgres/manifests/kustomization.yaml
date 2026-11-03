@@ -10,7 +10,9 @@ resources:
   - databases/interview.yaml
   - databases/alfred.yaml
   - databases/notify.yaml
+  - databases/fiscoai.yaml
   # Password dei ruoli (basic-auth, sigillate da `make pg-user APP=...`).
   - roles/interview-sealed.yaml
   - roles/alfred-sealed.yaml
   - roles/notify-sealed.yaml
+  - roles/fiscoai-sealed.yaml

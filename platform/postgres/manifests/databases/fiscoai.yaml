@@ -1,0 +1,14 @@
+# Database di FiscoAI (CRM + RAG per commercialisti). Lo schema lo crea l'app
+# (Alembic all'avvio).
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: pg-shared-fiscoai
+  namespace: databases
+spec:
+  cluster:
+    name: pg-shared
+  name: fiscoai
+  owner: fiscoai
+  # Default esplicito: togliere questo CR non fa DROP DATABASE.
+  databaseReclaimPolicy: retain

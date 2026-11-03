@@ -66,3 +66,8 @@ spec:
         login: true
         passwordSecret:
           name: pg-role-notify
+      - name: fiscoai
+        ensure: present
+        login: true
+        passwordSecret:
+          name: pg-role-fiscoai
