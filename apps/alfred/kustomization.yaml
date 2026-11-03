@@ -31,6 +31,6 @@ configMapGenerator:
 # main; ArgoCD picks up the commit and rolls out. Do not edit newTag by hand.
 images:
   - name: ghcr.io/gmottola00/alfred-backend
-    newTag: 07cea6741820619610d2476913832c7470103eac
+    newTag: d608d44dc2d7e10d2aff4f260ded43143374c01a
   - name: ghcr.io/gmottola00/alfred-web
     newTag: d608d44dc2d7e10d2aff4f260ded43143374c01a
