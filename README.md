@@ -1,8 +1,41 @@
-# Homelab — k3s + GitOps sul Minisforum UM790
+# 🏠 Homelab — k3s + GitOps
 
-Repo **source-of-truth** del cluster: tutto ciò che gira sull'homelab è descritto
-qui e sincronizzato da ArgoCD. Obiettivo: infra comune per tutte le app
-(Trip-AI, poi TickUp, poi Jarvis) e palestra di architettura.
+[![k3s](https://img.shields.io/badge/k3s-single--node-FFC61C?logo=k3s&logoColor=black)](https://k3s.io)
+[![ArgoCD](https://img.shields.io/badge/GitOps-ArgoCD-EF7B4D?logo=argo&logoColor=white)](https://argo-cd.readthedocs.io)
+[![Tailscale](https://img.shields.io/badge/access-Tailscale-242424?logo=tailscale&logoColor=white)](https://tailscale.com)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+Repo **source-of-truth** di un homelab Kubernetes su Minisforum UM790: tutto ciò
+che gira sul cluster è descritto qui e sincronizzato da ArgoCD. Nessuna porta
+aperta su Internet, nessun segreto in chiaro, nessun `kubectl apply` a mano
+dopo il bootstrap. Obiettivo: infra comune per le mie app e palestra di architettura.
+
+> 🇬🇧 **In short:** a single-node k3s cluster managed entirely via GitOps
+> (ArgoCD app-of-apps), reachable only over a Tailscale tailnet, with Sealed
+> Secrets, CloudNativePG, an LLM gateway (LiteLLM) and a Prometheus/Loki/Grafana
+> stack. Docs are in Italian; the manifests and Makefile are easy to adapt.
+
+## Indice
+
+- [Stack](#stack) · [Architettura](#architettura) · [Flusso di deploy](#flusso-di-deploy-gitops) · [Struttura](#struttura)
+- [Comandi quotidiani](#comandi-quotidiani) · [Bootstrap](#bootstrap-del-cluster-una-volta-sola) · [Nuova app](#aggiungere-una-nuova-app-il-pattern)
+- [Gateway LLM](#gateway-llm-litellm) · [Postgres](#postgres-condiviso-cloudnativepg) · [Notifiche](#notifiche-notify-hub) · [Observability](#observability)
+- [Adattarlo al tuo setup](#adattarlo-al-tuo-setup) · [Roadmap](#fasi-future) · [Licenza](#licenza)
+
+## Stack
+
+| Livello | Tecnologia |
+|---|---|
+| Kubernetes | k3s single-node (Ubuntu 24.04), Traefik disabilitato |
+| GitOps | ArgoCD, pattern app-of-apps, Kustomize + Helm multi-source |
+| Rete / accesso | Tailscale Operator (Ingress + certificati Let's Encrypt `*.ts.net`) |
+| Segreti | Sealed Secrets (cifrati e committati in Git) |
+| Database | CloudNativePG (`pg-shared`), Supabase cloud per alcune app |
+| LLM | LiteLLM (chiavi virtuali, budget) → Claude + Ollama locale su GPU |
+| Osservabilità | kube-prometheus-stack, Loki, Alloy, Grafana |
+| CI/CD | GitHub Actions nei repo delle app → GHCR → bump del tag qui |
+
+## Architettura
 
 ```
                     Internet ──✗ (nessuna porta aperta sul router)
@@ -58,6 +91,10 @@ apps/
   jarvis/                   # come trip-ai + ServiceAccount e ClusterRole di sola lettura
   litellm/                  # gateway LLM: proxy + Postgres + egress verso Ollama
   interview/                # Interview Trainer: backend FastAPI su pg-shared
+  tickup/                   # come trip-ai (Supabase cloud come DB)
+  alfred/                   # assistente personale, client di notify-hub
+  notify/                   # notify-hub: Web Push per le app del lab
+scripts/                    # helper richiamati dal Makefile (seal, pg-user, rekey, ...)
 legacy/                     # vecchio draft Caddy + docker-compose (riferimento storico)
 ```
 
@@ -114,7 +151,7 @@ helm upgrade --install tailscale-operator tailscale/tailscale-operator \
   --set-string oauth.clientId="$TS_CLIENT_ID" \
   --set-string oauth.clientSecret="$TS_CLIENT_SECRET"
 
-# 4. Accesso ArgoCD → questo repo (privato): deploy key in sola lettura
+# 4. Accesso ArgoCD → questo repo: deploy key in sola lettura (necessaria solo se il repo è privato)
 ssh-keygen -t ed25519 -f /tmp/argocd-deploy -N "" -C argocd@homelab
 # → aggiungi /tmp/argocd-deploy.pub come Deploy Key (read-only) del repo su GitHub
 kubectl -n argocd create secret generic repo-home-lab-infra \
@@ -351,3 +388,18 @@ helm upgrade --install argocd argo/argo-cd -n argocd -f platform/argocd/values.y
       mini PC, poi orchestratore + MCP
 - [ ] Auto-gestione della piattaforma: ArgoCD/operator/sealed-secrets adottati
       nel loop GitOps (app-of-apps anche per platform/)
+
+## Adattarlo al tuo setup
+
+La repo è pensata per il mio cluster, ma il pattern è riutilizzabile. Cosa cambiare:
+
+1. **Tailnet**: sostituisci `tail682dc3.ts.net` con il tuo (`grep -r ts.net`) e i nomi host in `apps/*/ingress*.yaml`.
+2. **Repo URL**: `bootstrap/root-app.yaml` e `bootstrap/apps/*.yaml` puntano a `gmottola00/Home-Lab-Infra`.
+3. **Secret**: i `*-sealed*.yaml` sono cifrati con la chiave del *mio* controller e **non sono decifrabili da te**. Rigenerali con `make seal` / `make pg-user` / `make litellm-rekey`.
+4. **Immagini**: i Deployment puntano a immagini GHCR delle mie app; sostituiscile con le tue o parti dal pattern in [Aggiungere una nuova app](#aggiungere-una-nuova-app-il-pattern).
+5. **Hardware**: lo storage usa `local-path` (single-node) e Ollama è su un PC `pop-os` raggiunto via tailnet: adatta o rimuovi `apps/litellm`.
+
+## Licenza
+
+[MIT](LICENSE) © Gianmarco Mottola. I manifest sono forniti così come sono,
+senza garanzie: rivedi sempre cosa applichi al tuo cluster.
