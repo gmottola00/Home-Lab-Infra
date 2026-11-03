@@ -503,17 +503,8 @@ make gpu-off          # shutdown via SSH → watt sotto soglia → presa OFF
 `gpu-off` non stacca mai la corrente a un PC acceso: se lo shutdown via SSH
 fallisce o i watt non scendono entro 3 minuti, la presa resta ON.
 
-**Setup una tantum su pop-os:**
-
-1. BIOS: *Restore on AC Power Loss* → **Power On** (presa ON = boot).
-2. Sul nodo: `ssh-keygen -t ed25519 -N "" -C gpu-poweroff -f ~/.ssh/gpu-poweroff`
-3. Su pop-os, in `~/.ssh/authorized_keys` (la chiave sa fare solo questo):
-   `command="sudo /usr/bin/systemctl poweroff",restrict ssh-ed25519 AAAA... gpu-poweroff`
-4. Su pop-os, `sudo visudo -f /etc/sudoers.d/gpu-poweroff`:
-   `gmottola ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff`
-5. Dopo il pairing, dalla UI: rinomina le prese in `gpu-plug` / `homelab-plug`
-   e imposta *power-on behavior* `off` per la GPU e `on` per il nodo (dopo un
-   blackout il nodo riparte da solo, la GPU no).
+**Setup una tantum** (pairing, BIOS e SSH su pop-os, prova end-to-end): checklist in
+[`apps/iot/README.md`](apps/iot/README.md).
 
 Home Assistant in futuro: `homeassistant.enabled: true` nel config, un utente
 MQTT in più e il suo namespace in `apps/iot/networkpolicy.yaml`.
