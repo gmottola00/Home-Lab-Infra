@@ -1,0 +1,34 @@
+# Volumi di FiscoAI. I primi PVC di un'app: local-path ha reclaimPolicy Delete,
+# quindi Prune=false,Delete=false come pg-shared — ArgoCD non li tocca mai,
+# nemmeno togliendo il file da Git.
+#
+# fiscoai-uploads: i PDF/DOCX caricati (storage_path in DB è relativo a /app).
+# fiscoai-backups: tar notturni degli upload (backup.yaml), stesso disco del
+#   nodo come i dump di Postgres: proteggono da cancellazioni, non dal disco rotto.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fiscoai-uploads
+  namespace: fiscoai
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fiscoai-backups
+  namespace: fiscoai
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi

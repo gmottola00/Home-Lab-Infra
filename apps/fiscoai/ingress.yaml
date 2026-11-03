@@ -1,0 +1,19 @@
+# Tailscale Operator ingress: device "fiscoai" sulla tailnet con certificato
+# Let's Encrypt → https://fiscoai.<tailnet>.ts.net
+# Nessun login nell'app: la tailnet è l'unico controllo d'accesso. Va bene per
+# dati di prova; con documenti fiscali veri di clienti serve un login.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fiscoai
+  namespace: fiscoai
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: fiscoai-backend
+      port:
+        number: 8000
+  tls:
+    - hosts:
+        - fiscoai
