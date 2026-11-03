@@ -37,36 +37,57 @@ dopo il bootstrap. Obiettivo: infra comune per le mie app e palestra di architet
 
 ## Architettura
 
+Nessuna porta aperta sul router: l'unica via d'ingresso è la tailnet. Ogni
+Ingress `ingressClassName: tailscale` diventa un device della tailnet con il suo
+certificato Let's Encrypt `*.ts.net`.
+
+```mermaid
+flowchart LR
+    internet((Internet)) -. "✗ nessuna porta aperta" .-x node
+    phone["📱 iPhone / laptop"] -- "Tailscale (WireGuard)" --> ts
+
+    subgraph node["Minisforum UM790 · Ubuntu 24.04 · k3s single-node"]
+        ts["Tailscale Operator<br/>Ingress + cert LE *.ts.net"]
+
+        subgraph apps["App"]
+            trip["trip-ai<br/>web + backend"]
+            tick["tickup<br/>web + backend"]
+            jarvis["jarvis<br/>web + backend"]
+            alfred["alfred<br/>web + backend"]
+            interview["interview<br/>backend"]
+            notify["notify-hub<br/>no Ingress"]
+        end
+
+        subgraph platform["Piattaforma"]
+            argo["ArgoCD"]
+            sealed["Sealed Secrets"]
+            litellm["LiteLLM<br/>gateway LLM"]
+            pg[("pg-shared<br/>CloudNativePG")]
+            obs["Prometheus · Loki<br/>Alloy · Grafana"]
+        end
+
+        ts --> trip & tick & jarvis & alfred & interview
+        ts --> argo & obs & litellm
+    end
+
+    git[("GitHub<br/>Home-Lab-Infra")] -- sync --> argo
+    ghcr[("GHCR")] -- immagini --> apps
+    supa[("Supabase cloud")] --- trip & tick
+    litellm --> anthropic["api.anthropic.com"]
+    litellm -- "egress tailnet" --> ollama["Ollama<br/>PC con RTX 5080"]
 ```
-                    Internet ──✗ (nessuna porta aperta sul router)
-                                      │
-iPhone ──[Tailscale]──────────────────┤
-                                      ▼
-  ┌────────────────────────────────────────────────────────────┐
-  │ Minisforum UM790 · Ubuntu 24.04 · k3s single-node          │
-  │                                                            │
-  │  Tailscale Operator ── Ingress (cert LE *.ts.net)          │
-  │       ├─ https://argocd.<tailnet>.ts.net  → ArgoCD UI      │
-  │       ├─ https://grafana.<tailnet>.ts.net → Grafana        │
-  │       ├─ https://interview.<tailnet>.ts.net → interview    │
-  │       ├─ https://jarvis.<tailnet>.ts.net  → jarvis-web     │
-  │       ├─ https://litellm.<tailnet>.ts.net → LiteLLM UI     │
-  │       ├─ https://tickup.<tailnet>.ts.net  → tickup-web     │
-  │       └─ https://trip-ai.<tailnet>.ts.net → trip-ai-web    │
-  │                                ── /api/* → trip-ai-backend │
-  │  ArgoCD ── sync da questo repo (app-of-apps)               │
-  │  Sealed Secrets ── secrets cifrati committati in Git       │
-  │  Prometheus + Loki ── metriche e log di ogni pod → Grafana │
-  │  LiteLLM ── gateway LLM: chiavi virtuali, budget, routing  │
-  │       ├─ claude-* → api.anthropic.com                      │
-  │       └─ local/*  → egress tailnet → Ollama (PC con GPU)   │
-  │  CloudNativePG ── pg-shared: un Postgres, un DB per app    │
-  │       └─ dump notturni (pg_dump) su volume, 7 giorni       │
-  └────────────────────────────────────────────────────────────┘
-        DB/Auth: Supabase (cloud) per Trip-AI e TickUp; in-cluster
-        pg-shared (Interview Trainer) e il Postgres di LiteLLM
-        Immagini: GHCR, buildate da GitHub Actions nei repo delle app
-```
+
+| Hostname (`<nome>.<tailnet>.ts.net`) | Servizio |
+|---|---|
+| `argocd` | UI di ArgoCD |
+| `grafana` | Grafana (metriche + log) |
+| `litellm` | UI di LiteLLM (chiavi virtuali, spesa) |
+| `trip-ai` · `tickup` · `jarvis` · `alfred` | PWA web, `/api/*` → backend |
+| `interview` | Interview Trainer |
+
+**Dove stanno i dati:** Supabase (cloud) per Trip-AI e TickUp; `pg-shared`
+in-cluster per Interview Trainer, Alfred e notify-hub; LiteLLM ha ancora il suo
+Postgres. Le immagini sono su GHCR, buildate da GitHub Actions nei repo delle app.
 
 ## Flusso di deploy (GitOps)
 
@@ -74,6 +95,49 @@ iPhone ──[Tailscale]──────────────────�
 2. GitHub Actions builda l'immagine → push su GHCR (`:latest` + `:<sha>`)
 3. Il workflow committa il nuovo tag in `apps/<app>/kustomization.yaml` **qui**
 4. ArgoCD vede il commit e rolla la nuova versione — nessun comando sul server
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev
+    participant App as Repo app<br/>(es. Trip-AI)
+    participant CI as GitHub Actions
+    participant GHCR
+    participant Infra as Home-Lab-Infra
+    participant Argo as ArgoCD
+    participant K8s as k3s
+
+    Dev->>App: git push main
+    App->>CI: workflow
+    CI->>GHCR: push image :latest + :sha
+    CI->>Infra: commit newTag in apps/#lt;app#gt;/kustomization.yaml
+    Note over CI,Infra: retry su main aggiornato:<br/>tutte le CI pushano qui
+    Argo->>Infra: polling (o make argo-refresh)
+    Argo->>K8s: sync → rollout
+    K8s->>GHCR: pull :sha
+```
+
+### App-of-apps
+
+L'unica cosa applicata a mano è `bootstrap/root-app.yaml`. Lei sincronizza
+`bootstrap/apps/`, dove vive una `Application` per componente: aggiungere un'app
+al cluster = aggiungere un YAML lì e pushare.
+
+```mermaid
+flowchart TD
+    root["root<br/>bootstrap/root-app.yaml<br/><i>kubectl apply, una volta</i>"] --> dir["bootstrap/apps/*.yaml"]
+
+    dir --> a1["trip-ai"] & a2["tickup"] & a3["jarvis"] & a4["alfred"] & a5["interview"] & a6["notify"]
+    dir --> p1["litellm"]
+    dir --> p2["postgres<br/><i>multi-source</i>"]
+    dir --> p3["observability<br/><i>multi-source</i>"]
+
+    a1 & a2 & a3 & a4 & a5 & a6 & p1 -.-> k["apps/#lt;nome#gt;/<br/>kustomize"]
+    p2 -.-> pc["chart cloudnative-pg<br/>+ platform/postgres/"]
+    p3 -.-> oc["chart upstream<br/>+ platform/observability/"]
+
+    helm["helm CLI al bootstrap<br/>(non ancora in GitOps)"] -.-> h1["ArgoCD"] & h2["Sealed Secrets"] & h3["Tailscale Operator"]
+```
 
 ## Struttura
 
@@ -196,12 +260,50 @@ kubectl create secret generic <nome> -n <namespace> \
 
 Il file cifrato è committabile: solo il controller nel cluster può decifrarlo.
 
+```mermaid
+sequenceDiagram
+    participant L as Laptop
+    participant C as sealed-secrets controller<br/>(kube-system)
+    participant G as Git
+    participant A as ArgoCD
+    participant N as Namespace dell'app
+
+    L->>C: kubeseal: chiave pubblica
+    L->>L: Secret → SealedSecret (cifrato)
+    L->>G: commit *-sealed*.yaml
+    A->>G: sync
+    A->>N: applica SealedSecret
+    C->>N: decifra → Secret
+    Note over L,N: il valore in chiaro non tocca mai Git<br/>(gli script make seal / pg-user / rekey non lo stampano)
+```
+
 ## Gateway LLM (LiteLLM)
 
 Tutte le chiamate ai modelli delle app passano da LiteLLM. La vera
 `ANTHROPIC_API_KEY` vive solo in `litellm-secrets`; le app hanno una **chiave
 virtuale** ciascuna, revocabile e con budget, e la spesa si vede per chiave su
 `https://litellm.<tailnet>.ts.net/ui` (login con la master key).
+
+```mermaid
+flowchart LR
+    subgraph clients["App (una chiave virtuale ciascuna)"]
+        j["jarvis"]
+        t["trip-ai"]
+        al["alfred"]
+        iv["interview"]
+    end
+
+    subgraph ns["ns: litellm"]
+        proxy["litellm-proxy :4000<br/>budget · spesa per chiave"]
+        lpg[("Postgres<br/>chiavi + spend")]
+        egress["Service ollama-gpu<br/>egress Tailscale"]
+    end
+
+    j & t & al & iv -- "sk-virtual" --> proxy
+    proxy --- lpg
+    proxy -- "claude-*<br/>ANTHROPIC_API_KEY vera" --> anth["api.anthropic.com"]
+    proxy -- "local/*" --> egress -- tailnet --> ollama["Ollama su pop-os:11434<br/>qwen3 30b/14b · qwen2.5-coder"]
+```
 
 | Endpoint (dal cluster) | Per cosa |
 |---|---|
@@ -210,9 +312,10 @@ virtuale** ciascuna, revocabile e con budget, e la spesa si vede per chiave su
 
 I modelli sono in `apps/litellm/config.yaml`: `claude-*` sono Anthropic,
 `local/*` sono Ollama sul PC fisso, raggiunto dal Service `ollama-gpu` (egress
-del Tailscale Operator verso `pop-os`). PC spento → fallback su
-`claude-haiku-4-5`. Le ACL della tailnet devono permettere `tag:k8s` →
-`pop-os:11434`.
+del Tailscale Operator verso `pop-os`). **Nessun fallback silenzioso** da
+`local/*` a Claude: a PC spento la richiesta fallisce dopo `stream_timeout`
+(30 s) e il consenso a passare a Claude lo chiede Jarvis all'utente. Le ACL
+della tailnet devono permettere `tag:k8s` → `pop-os:11434`.
 
 **Primo deploy:**
 
@@ -246,6 +349,33 @@ un'app revoca prima quella vecchia dalla UI (Virtual Keys → Delete).
 Un solo server Postgres per le app del cluster, `pg-shared` nel namespace
 `databases`, gestito dall'operator **CloudNativePG**. Ogni app ha in Git il suo
 database e il suo ruolo; l'operator li crea e ne mantiene la password.
+
+```mermaid
+flowchart LR
+    subgraph appns["Namespace delle app"]
+        iv["interview-backend"]
+        al["alfred-backend"]
+        nh["notify-backend"]
+    end
+
+    subgraph db["ns: databases"]
+        op["CNPG operator"]
+        subgraph cluster["Cluster pg-shared · Postgres 17 · 20Gi"]
+            d1[("interview")]
+            d2[("alfred")]
+            d3[("notify")]
+        end
+        cron["CronJob pg-backup<br/>03:00 ogni notte"]
+        pvc[("PVC backup<br/>/backups/#lt;data#gt;/ · 7 giorni")]
+    end
+
+    git["Git: Cluster, Database,<br/>ruoli sigillati"] --> op --> cluster
+    iv -- "DATABASE_URL<br/>pg-shared-rw:5432" --> d1
+    al --> d2
+    nh --> d3
+    cron -- "globals.sql + pg_dump -Fc" --> pvc
+    cluster -.-> cron
+```
 
 | Pezzo | Dove |
 |---|---|
@@ -299,6 +429,31 @@ trasloco su `pg-shared` è un passo successivo.
 
 `apps/notify/`: il servizio Web Push del lab (codice nel repo `Notify-Hub`). Tiene la chiave VAPID e le sottoscrizioni per app su `pg-shared/notify`, e consegna ad Apple, Mozilla e Google. **Nessun Ingress:** una NetworkPolicy ammette solo i namespace `alfred` e `jarvis`; il token identifica l'app, e in Git ne sta solo lo sha256 (`NOTIFY_APPS`).
 
+```mermaid
+flowchart LR
+    subgraph phone["iPhone"]
+        pwa["PWA<br/>sw.js"]
+    end
+
+    subgraph cluster["k3s"]
+        al["ns: alfred<br/>alfred-backend"]
+        ja["ns: jarvis<br/>jarvis-backend"]
+        other["altri namespace"]
+        subgraph nsn["ns: notify"]
+            np{{"NetworkPolicy<br/>solo alfred, jarvis"}}
+            hub["notify-backend :8000<br/>ClusterIP, no Ingress"]
+        end
+        pg[("pg-shared<br/>db: notify")]
+    end
+
+    pwa -- "HTTPS via Ingress tailnet" --> al
+    al & ja -- "Bearer NOTIFY_TOKEN" --> np --> hub
+    other -. "✗ bloccato" .-x np
+    hub --> pg
+    hub -- "VAPID, payload cifrato" --> push["Apple / Google / Mozilla<br/>push service"]
+    push -. push .-> pwa
+```
+
 Primo deploy:
 
 ```bash
@@ -319,6 +474,28 @@ Metriche e log di tutto il cluster, su `https://grafana.<tailnet>.ts.net`
 | kube-prometheus-stack | Prometheus + Alertmanager + Grafana + kube-state-metrics + node-exporter |
 | Loki | archivio dei log, retention 30 giorni |
 | Alloy | legge i log dei pod e li spedisce a Loki (sostituisce Promtail, EOL da marzo 2026) |
+
+```mermaid
+flowchart LR
+    subgraph sources["Sorgenti"]
+        pods["Pod di tutte le app"]
+        ksm["kube-state-metrics"]
+        ne["node-exporter"]
+        sm["ServiceMonitor / PodMonitor<br/>(ArgoCD, pg-shared, ...)"]
+    end
+
+    api["API server k8s"]
+    alloy["Alloy<br/>Deployment, 1 replica"]
+    loki[("Loki<br/>log · 30 giorni")]
+    prom[("Prometheus<br/>metriche")]
+    am["Alertmanager<br/>(muto, per ora)"]
+    graf["Grafana<br/>grafana.#lt;tailnet#gt;.ts.net"]
+
+    pods -- stdout --> api -- "log via API" --> alloy --> loki
+    ksm & ne & sm -- scrape --> prom
+    prom --> am
+    loki & prom --> graf
+```
 
 Cosa risolve, in concreto: `make logs-prev` mostra i log di **un solo** crash e li
 perde al riavvio successivo. In Loki i log del pod distrutto restano, e si cercano
@@ -381,8 +558,7 @@ helm upgrade --install argocd argo/argo-cd -n argocd -f platform/argocd/values.y
       valutazione su Haiku via LiteLLM, dati migrati da SQLite
 - [x] **Notifiche (notify-hub)**: Web Push per le app del lab, una chiave VAPID
       e un token per app, niente Ingress; primo client Alfred
-- [ ] Regole di notifica in Alfred, client in Jarvis, webhook di Alertmanager
-      verso notify-hub
+- [ ] Regole di notifica in Alfred, webhook di Alertmanager verso notify-hub
 - [ ] Backup di `pg-shared` fuori dal nodo (S3 / barman-cloud) e LiteLLM su `pg-shared`
 - [ ] **Jarvis (GPU)**: PC fisso come k3s agent on-demand — Wake-on-LAN dal
       mini PC, poi orchestratore + MCP
