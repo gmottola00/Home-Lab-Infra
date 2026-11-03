@@ -307,6 +307,11 @@ litellm-rekey: ## Nuova chiave virtuale per APP e risigilla il suo secret (BUDGE
 	$(call check-app)
 	@scripts/litellm-rekey.sh $(APP) "$(MODELS)" $(BUDGET) $(KEY_VAR)
 
+.PHONY: secret-add
+secret-add: ## Aggiunge KEY a SECRET in NS leggendo il valore senza eco (FILE=sealed file di destinazione)
+	@test -n "$(SECRET)" -a -n "$(KEY)" -a -n "$(FILE)" || { echo "uso: make secret-add NS=litellm SECRET=litellm-secrets KEY=VOYAGE_API_KEY FILE=apps/litellm/sealed-secret.yaml"; exit 1; }
+	@read -rsp "$(KEY): " v && echo && printf '%s' "$$v" | scripts/secret-add.sh $(NS) $(SECRET) $(KEY) $(FILE)
+
 .PHONY: secrets
 secrets: ## Secret decifrati presenti nel namespace di APP (solo i nomi)
 	$(call check-app)
