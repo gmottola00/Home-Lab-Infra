@@ -1,0 +1,8 @@
+# Namespace del Qdrant condiviso. Come "databases": ArgoCD non lo cancella mai,
+# nemmeno togliendo il file da Git (con lui se ne andrebbe il volume).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: qdrant
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false

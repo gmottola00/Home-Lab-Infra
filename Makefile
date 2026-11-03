@@ -145,6 +145,14 @@ validate: ## Dry-run server-side di tutte le app (da fare prima del push)
 		kubectl kustomize platform/postgres/manifests >/dev/null || exit 1; \
 		echo "   (CRD di CNPG o ns databases non ancora nel cluster: solo render kustomize)"; \
 	fi
+	@echo "== qdrant"
+	@if kubectl get ns qdrant >/dev/null 2>&1; then \
+		kubectl kustomize platform/qdrant/manifests \
+			| kubectl apply --dry-run=server -f - >/dev/null || exit 1; \
+	else \
+		kubectl kustomize platform/qdrant/manifests >/dev/null || exit 1; \
+		echo "   (ns qdrant non ancora nel cluster: solo render kustomize)"; \
+	fi
 	@kubectl apply --dry-run=server -f bootstrap/root-app.yaml >/dev/null
 	@kubectl apply --dry-run=server -f bootstrap/apps/ >/dev/null
 	@echo "OK"
@@ -229,6 +237,27 @@ pg-backup: ## Lancia subito il CronJob di backup e ne segue i log
 pg-backups: ## Elenco dei dump sul volume pg-backups
 	@kubectl -n databases run pg-backups-ls --rm -i --quiet --restart=Never --image=busybox:1.37 \
 		--overrides='{"spec":{"containers":[{"name":"ls","image":"busybox:1.37","command":["sh","-c","cd /backups && du -sh 20* 2>/dev/null; ls -l 20*/ 2>/dev/null || echo nessun backup"],"volumeMounts":[{"name":"b","mountPath":"/backups"}]}],"volumes":[{"name":"b","persistentVolumeClaim":{"claimName":"pg-backups"}}]}}'
+
+##@ Qdrant (vector store condiviso, namespace qdrant)
+
+.PHONY: qdrant-status
+qdrant-status: ## Pod, volume e collection del Qdrant condiviso
+	@kubectl -n qdrant get statefulset,pods,pvc
+	@echo
+	@kubectl -n qdrant exec qdrant-0 -- sh -c \
+		'curl -s -H "api-key: $$QDRANT__SERVICE__API_KEY" localhost:6333/collections 2>/dev/null || echo "(curl non disponibile nell'"'"'immagine)"'
+
+.PHONY: qdrant-key
+qdrant-key: ## Senza APP: nuova chiave sigillata in platform/qdrant. Con APP=x: la copia in x-secrets come QDRANT_API_KEY
+	@scripts/qdrant-key.sh $(if $(filter command line,$(origin APP)),$(APP))
+
+.PHONY: qdrant-pf
+qdrant-pf: ## Port-forward di Qdrant su localhost:6333 (dashboard su /dashboard, chiave: make qdrant-pass)
+	kubectl -n qdrant port-forward svc/qdrant 6333:6333
+
+.PHONY: qdrant-pass
+qdrant-pass: ## Stampa la chiave API di Qdrant (per la dashboard)
+	@kubectl -n qdrant get secret qdrant-secrets -o jsonpath='{.data.QDRANT__SERVICE__API_KEY}' | base64 -d; echo
 
 ##@ Notifiche (notify-hub)
 
