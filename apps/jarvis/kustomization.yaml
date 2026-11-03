@@ -41,6 +41,6 @@ configMapGenerator:
 # main; ArgoCD picks up the commit and rolls out. Do not edit newTag by hand.
 images:
   - name: ghcr.io/gmottola00/jarvis-backend
-    newTag: ff3efe057552dd5fa760b605a67a280f15bc20d9
+    newTag: fc33e41b03f2f1c92f7e490af04c863dbca71fb5
   - name: ghcr.io/gmottola00/jarvis-web
     newTag: 74a374ce0ffb7e308ee9e6d5c5fb88a92bbdab80
