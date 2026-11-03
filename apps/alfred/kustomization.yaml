@@ -33,4 +33,4 @@ images:
   - name: ghcr.io/gmottola00/alfred-backend
     newTag: 91849c3b16107cf3a77ca532545bb0d8f76b5320
   - name: ghcr.io/gmottola00/alfred-web
-    newTag: d608d44dc2d7e10d2aff4f260ded43143374c01a
+    newTag: 91849c3b16107cf3a77ca532545bb0d8f76b5320
