@@ -29,4 +29,4 @@ configMapGenerator:
 # newTag by hand.
 images:
   - name: ghcr.io/gmottola00/interview-backend
-    newTag: 2b0b050f167f2cbf29e0ff94ce7bcb861de10025
+    newTag: 99d6198f469721e18ceec58382fcb96ee87fcaae
