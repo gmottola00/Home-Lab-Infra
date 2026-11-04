@@ -60,13 +60,48 @@ La chiave è già sul nodo: `~/.ssh/gpu-poweroff` (privata, non si sposta) e
 - [ ] `whoami` su pop-os: lo script usa `gm8la`; se cambia, `GPU_SSH_USER=<nome> make gpu-off`
 
 > Qualsiasi connessione con questa chiave **spegne subito pop-os**, anche un
-> `ssh ... true` di prova. Il test vero è il punto 5.
+> `ssh ... true` di prova. Il test vero è il punto 6.
 
 Se la chiave si perde o va cambiata: sul nodo
 `ssh-keygen -t ed25519 -N "" -C gpu-poweroff -f ~/.ssh/gpu-poweroff` e
 sostituisci la riga in `authorized_keys` su pop-os.
 
-## 5. Prova end-to-end (dal nodo)
+## 5. Sblocco automatico del disco cifrato (TPM)
+
+Il disco di pop-os (`/dev/nvme0n1p3`, `cryptdata`) è LUKS. Senza questo passo,
+dopo `make gpu-on` il PC si ferma alla richiesta della passphrase (sembra il
+login, ma non lo è): il sistema non parte, niente Tailscale, niente Ollama.
+
+Pop!_OS 22.04 usa `initramfs-tools`, che ignora `tpm2-device=` in
+`/etc/crypttab`: si usa clevis. Tutto **su pop-os**:
+
+- [ ] Pacchetti:
+  ```bash
+  sudo apt install clevis clevis-luks clevis-tpm2 clevis-initramfs
+  ```
+- [ ] Bind al TPM (chiede la passphrase LUKS attuale):
+  ```bash
+  sudo clevis luks bind -d /dev/nvme0n1p3 tpm2 '{"pcr_bank":"sha256","pcr_ids":"7"}'
+  ```
+  `pcr_bank` serve: senza, clevis usa sha1, che questo TPM non ha attivo, e
+  fallisce con `pcr-input-file filesize does not match pcr set-list`.
+  L'avviso `il valore 512 è al di fuori dell'intervallo di entropia` si ignora.
+- [ ] Verifica: `sudo clevis luks list -d /dev/nvme0n1p3` mostra una riga `tpm2 ... sha256 ... "pcr_ids":"7"`
+- [ ] Mette clevis nell'avvio (senza questo il TPM non viene usato):
+  ```bash
+  sudo update-initramfs -u -k all
+  ```
+- [ ] Riavvia senza toccare niente: la richiesta della passphrase sparisce da sola dopo qualche secondo
+
+La passphrase resta valida come riserva (clevis aggiunge solo un keyslot).
+
+> Il PCR 7 dipende da Secure Boot: se cambi le impostazioni di Secure Boot nel
+> BIOS (o a volte dopo un aggiornamento del firmware) lo sblocco automatico
+> smette di funzionare. Scrivi la passphrase a mano e rifai il bind
+> (`sudo clevis luks unbind -d /dev/nvme0n1p3 -s <slot>` per togliere quello vecchio).
+> Con Secure Boot disattivato la cifratura protegge meno da chi ha accesso fisico al PC.
+
+## 6. Prova end-to-end (dal nodo)
 
 - [ ] `make gpu-status`: presa ON, watt alti, pop-os sulla tailnet, Ollama su
 - [ ] `make gpu-off` (chiudi prima il lavoro aperto su pop-os): pop-os si spegne, i watt scendono, presa OFF
