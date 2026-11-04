@@ -10,7 +10,8 @@ resources:
   - jarvis-reader-job.yaml
   # Encrypted with kubeseal — safe to commit; only the in-cluster controller
   # can decrypt them. Keys: LITELLM_MASTER_KEY, LITELLM_SALT_KEY,
-  # ANTHROPIC_API_KEY, POSTGRES_PASSWORD, DATABASE_URL, JARVIS_READER_PASSWORD.
+  # ANTHROPIC_API_KEY, POSTGRES_PASSWORD, DATABASE_URL, JARVIS_READER_PASSWORD,
+  # VOYAGE_API_KEY (make secret-add NS=litellm SECRET=litellm-secrets ...).
   - sealed-secret.yaml
 
 # config.yaml diventa la ConfigMap litellm-config-<hash>: cambiare un modello o

@@ -1,0 +1,17 @@
+# Qdrant condiviso (vedi statefulset.yaml per endpoint e scelte).
+#
+# Aggiungere un'app consumer (es. "foo"):
+#   1. "foo" nella lista di networkpolicy.yaml
+#   2. QDRANT_URL=http://qdrant.qdrant.svc.cluster.local:6333 nel configMap di foo
+#   3. QDRANT_API_KEY nel secret di foo (stesso valore di qdrant-secrets,
+#      make qdrant-key APP=foo lo copia senza stamparlo)
+#   4. collection con il nome dell'app come prefisso (foo_chunks, ...)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - statefulset.yaml
+  - networkpolicy.yaml
+  - servicemonitor.yaml
+  # qdrant-secrets: QDRANT__SERVICE__API_KEY (make qdrant-key)
+  - sealed-secret.yaml

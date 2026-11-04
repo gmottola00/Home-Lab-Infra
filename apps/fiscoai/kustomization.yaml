@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - pvc.yaml
+  - backend.yaml
+  - backup.yaml
+  - ingress.yaml
+  # Encrypted with kubeseal — safe to commit; only the in-cluster controller
+  # can decrypt them.
+  # fiscoai-secrets: QDRANT_API_KEY (make qdrant-key APP=fiscoai), poi
+  #   LLM_API_KEY (make litellm-rekey APP=fiscoai KEY_VAR=LLM_API_KEY ...)
+  - sealed-secret.yaml
+  # fiscoai-db: DATABASE_URL verso pg-shared (make pg-user APP=fiscoai)
+  - db-sealed-secret.yaml
+  - ghcr-pull-secret.yaml
+configMapGenerator:
+  - name: fiscoai-config
+    namespace: fiscoai
+    literals:
+      # Chat ed embedding passano tutti dal gateway (API OpenAI-compatibile).
+      - LLM_BASE_URL=http://litellm-proxy.litellm.svc.cluster.local:4000/v1
+      - LLM_DEFAULT_MODEL=claude-sonnet-5
+      # Modelli nel selettore della UI. local/* a PC spento: errore chiaro,
+      # nessun ripiego su Claude.
+      - LLM_MODELS=claude-haiku-4-5,claude-sonnet-5,local/qwen3-14b
+      - EMBED_MODEL=voyage-finance-2
+      # Qdrant condiviso (platform/qdrant); fiscoai è nella sua NetworkPolicy.
+      - QDRANT_URL=http://qdrant.qdrant.svc.cluster.local:6333
+      - QDRANT_COLLECTION=fiscai_chunks
+      # Relativo a /app: storage_path in DB è salvato così.
+      - UPLOAD_PATH=./data/uploads
+# CI (FiscoAI, .github/workflows/backend.yml) bumps newTag to the commit SHA on
+# every push to main; ArgoCD picks up the commit and rolls out. Do not edit
+# newTag by hand.
+images:
+  - name: ghcr.io/gmottola00/fiscoai-backend
+    newTag: latest

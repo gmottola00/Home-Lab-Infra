@@ -1,0 +1,32 @@
+# Qdrant condiviso: il vector store delle app RAG (platform/qdrant/manifests).
+# Wave 1: dopo kube-prometheus-stack (CRD ServiceMonitor) e prima delle app che
+# lo usano (wave 2). SkipDryRunOnMissingResource per il primo sync, quando la
+# CRD può non esserci ancora.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: qdrant
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:gmottola00/Home-Lab-Infra.git
+    targetRevision: main
+    path: platform/qdrant/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: qdrant
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

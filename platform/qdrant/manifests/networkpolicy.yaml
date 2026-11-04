@@ -1,0 +1,25 @@
+# Qdrant accetta traffico solo dalle app che lo usano e da Prometheus. La
+# chiave resta il vero controllo; questa policy toglie di mezzo il resto del
+# cluster. Le probe del kubelet partono dal nodo e passano sempre.
+# Una nuova app RAG → il suo namespace nella lista, più QDRANT_API_KEY nel suo
+# secret (vedi README, "Qdrant condiviso").
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: qdrant
+  namespace: qdrant
+spec:
+  podSelector:
+    matchLabels:
+      app: qdrant
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - key: kubernetes.io/metadata.name
+                operator: In
+                values: [fiscoai, monitoring]
+      ports:
+        - port: 6333
+        - port: 6334

@@ -1,0 +1,59 @@
+# Backup notturno degli upload: un tar.gz al giorno su fiscoai-backups, tenuti
+# KEEP_DAYS giorni. Mezz'ora dopo pg-backup, così DB e file sono coerenti a
+# meno degli upload fatti di notte. Qdrant non serve: i vettori si ricostruiscono
+# con il reindex dei documenti.
+# Con local-path i volumi RWO stanno sullo stesso nodo del backend, quindi il
+# Job può montare uploads anche mentre il backend gira.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: fiscoai-uploads-backup
+  namespace: fiscoai
+spec:
+  schedule: "30 3 * * *"
+  timeZone: Europe/Rome
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: busybox:1.37
+              env:
+                - name: KEEP_DAYS
+                  value: "7"
+              command:
+                - sh
+                - -euc
+                - |
+                  day=$(date +%F)
+                  tmp=/backups/.tmp-$day.tar.gz
+                  tar czf "$tmp" -C /uploads .
+                  mv "$tmp" "/backups/uploads-$day.tar.gz"
+                  find /backups -name 'uploads-*.tar.gz' -mtime +"$KEEP_DAYS" -print -delete
+                  ls -l /backups
+              volumeMounts:
+                - name: uploads
+                  mountPath: /uploads
+                  readOnly: true
+                - name: backups
+                  mountPath: /backups
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 256Mi
+          volumes:
+            - name: uploads
+              persistentVolumeClaim:
+                claimName: fiscoai-uploads
+                readOnly: true
+            - name: backups
+              persistentVolumeClaim:
+                claimName: fiscoai-backups

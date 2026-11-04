@@ -19,7 +19,7 @@ dopo il bootstrap. Obiettivo: infra comune per le mie app e palestra di architet
 
 - [Stack](#stack) · [Architettura](#architettura) · [Flusso di deploy](#flusso-di-deploy-gitops) · [Struttura](#struttura)
 - [Comandi quotidiani](#comandi-quotidiani) · [Bootstrap](#bootstrap-del-cluster-una-volta-sola) · [Nuova app](#aggiungere-una-nuova-app-il-pattern)
-- [Gateway LLM](#gateway-llm-litellm) · [Postgres](#postgres-condiviso-cloudnativepg) · [Notifiche](#notifiche-notify-hub) · [Zigbee e GPU](#zigbee-e-gpu-iot) · [Observability](#observability)
+- [Gateway LLM](#gateway-llm-litellm) · [Postgres](#postgres-condiviso-cloudnativepg) · [Qdrant](#qdrant-condiviso) · [Notifiche](#notifiche-notify-hub) · [Zigbee e GPU](#zigbee-e-gpu-iot) · [Observability](#observability)
 - [Adattarlo al tuo setup](#adattarlo-al-tuo-setup) · [Roadmap](#fasi-future) · [Licenza](#licenza)
 
 ## Stack
@@ -56,6 +56,7 @@ flowchart LR
             jarvis["jarvis<br/>web + backend"]
             alfred["alfred<br/>web + backend"]
             interview["interview<br/>backend"]
+            fiscoai["fiscoai<br/>backend"]
             notify["notify-hub<br/>no Ingress"]
         end
 
@@ -69,10 +70,11 @@ flowchart LR
             sealed["Sealed Secrets"]
             litellm["LiteLLM<br/>gateway LLM"]
             pg[("pg-shared<br/>CloudNativePG")]
+            qdrant[("qdrant<br/>vector store")]
             obs["Prometheus · Loki<br/>Alloy · Grafana"]
         end
 
-        ts --> trip & tick & jarvis & alfred & interview
+        ts --> trip & tick & jarvis & alfred & interview & fiscoai
         ts --> argo & obs & litellm & z2m
         z2m <--> mqtt
     end
@@ -82,6 +84,7 @@ flowchart LR
     supa[("Supabase cloud")] --- trip & tick
     litellm --> anthropic["api.anthropic.com"]
     litellm -- "egress tailnet" --> ollama["Ollama<br/>PC con RTX 5080"]
+    litellm --> voyage["api.voyageai.com<br/>embedding"]
     z2m -. "Zigbee (dongle USB)" .-> plug["presa gpu-plug"]
     plug -. "corrente" .-> ollama
 ```
@@ -93,11 +96,13 @@ flowchart LR
 | `litellm` | UI di LiteLLM (chiavi virtuali, spesa) |
 | `trip-ai` · `tickup` · `jarvis` · `alfred` | PWA web, `/api/*` → backend |
 | `interview` | Interview Trainer |
+| `fiscoai` | FiscoAI (CRM + RAG per commercialisti) |
 | `zigbee` | UI di Zigbee2MQTT |
 
 **Dove stanno i dati:** Supabase (cloud) per Trip-AI e TickUp; `pg-shared`
-in-cluster per Interview Trainer, Alfred e notify-hub; LiteLLM ha ancora il suo
-Postgres. Le immagini sono su GHCR, buildate da GitHub Actions nei repo delle app.
+in-cluster per Interview Trainer, Alfred, notify-hub e FiscoAI; vettori sul
+Qdrant condiviso (FiscoAI); upload di FiscoAI su un PVC suo. LiteLLM ha ancora
+il suo Postgres. Le immagini sono su GHCR, buildate da GitHub Actions nei repo delle app.
 
 ## Flusso di deploy (GitOps)
 
@@ -137,14 +142,16 @@ al cluster = aggiungere un YAML lì e pushare.
 flowchart TD
     root["root<br/>bootstrap/root-app.yaml<br/><i>kubectl apply, una volta</i>"] --> dir["bootstrap/apps/*.yaml"]
 
-    dir --> a1["trip-ai"] & a2["tickup"] & a3["jarvis"] & a4["alfred"] & a5["interview"] & a6["notify"] & a7["iot"]
+    dir --> a1["trip-ai"] & a2["tickup"] & a3["jarvis"] & a4["alfred"] & a5["interview"] & a6["notify"] & a7["iot"] & a8["fiscoai"]
     dir --> p1["litellm"]
     dir --> p2["postgres<br/><i>multi-source</i>"]
     dir --> p3["observability<br/><i>multi-source</i>"]
+    dir --> p4["qdrant"]
 
-    a1 & a2 & a3 & a4 & a5 & a6 & a7 & p1 -.-> k["apps/#lt;nome#gt;/<br/>kustomize"]
+    a1 & a2 & a3 & a4 & a5 & a6 & a7 & a8 & p1 -.-> k["apps/#lt;nome#gt;/<br/>kustomize"]
     p2 -.-> pc["chart cloudnative-pg<br/>+ platform/postgres/"]
     p3 -.-> oc["chart upstream<br/>+ platform/observability/"]
+    p4 -.-> qc["platform/qdrant/manifests<br/>kustomize"]
 
     helm["helm CLI al bootstrap<br/>(non ancora in GitOps)"] -.-> h1["ArgoCD"] & h2["Sealed Secrets"] & h3["Tailscale Operator"]
 ```
@@ -302,6 +309,7 @@ flowchart LR
         t["trip-ai"]
         al["alfred"]
         iv["interview"]
+        fa["fiscoai"]
     end
 
     subgraph ns["ns: litellm"]
@@ -310,18 +318,21 @@ flowchart LR
         egress["Service ollama-gpu<br/>egress Tailscale"]
     end
 
-    j & t & al & iv -- "sk-virtual" --> proxy
+    j & t & al & iv & fa -- "sk-virtual" --> proxy
     proxy --- lpg
     proxy -- "claude-*<br/>ANTHROPIC_API_KEY vera" --> anth["api.anthropic.com"]
     proxy -- "local/*" --> egress -- tailnet --> ollama["Ollama su pop-os:11434<br/>qwen3 30b/14b · qwen2.5-coder"]
+    proxy -- "voyage-*<br/>VOYAGE_API_KEY vera" --> voy["api.voyageai.com"]
 ```
 
 | Endpoint (dal cluster) | Per cosa |
 |---|---|
 | `http://litellm-proxy.litellm.svc.cluster.local:4000/anthropic` | Claude con l'API nativa (pass-through: thinking, effort, structured outputs invariati) |
 | `http://litellm-proxy.litellm.svc.cluster.local:4000/v1/messages` | formato Anthropic verso qualsiasi modello, anche `local/*` (LiteLLM traduce per Ollama) |
+| `http://litellm-proxy.litellm.svc.cluster.local:4000/v1` | API OpenAI-compatibile: `/chat/completions` per tutti i modelli, `/embeddings` per `voyage-*` (interview, FiscoAI) |
 
 I modelli sono in `apps/litellm/config.yaml`: `claude-*` sono Anthropic,
+`voyage-*` sono embedding Voyage AI (`VOYAGE_API_KEY` in `litellm-secrets`),
 `local/*` sono Ollama sul PC fisso, raggiunto dal Service `ollama-gpu` (egress
 del Tailscale Operator verso `pop-os`). **Nessun fallback silenzioso** da
 `local/*` a Claude: a PC spento la richiesta fallisce dopo `stream_timeout`
@@ -435,6 +446,31 @@ pg_restore -h pg-shared-rw -U postgres -d <db> --clean --if-exists /backups/<dat
 
 LiteLLM resta per ora sul suo Postgres (`apps/litellm/postgres.yaml`); il
 trasloco su `pg-shared` è un passo successivo.
+
+## Qdrant condiviso
+
+`platform/qdrant/manifests`: un Qdrant per tutte le app RAG del lab, Application
+`qdrant` (wave 1). StatefulSet a replica singola su `local-path` (10Gi), come il
+Postgres di LiteLLM: niente chart, niente cluster mode.
+
+| | |
+|---|---|
+| Endpoint | `http://qdrant.qdrant.svc.cluster.local:6333` (REST), `:6334` (gRPC) |
+| Accesso | chiave API unica in `qdrant-secrets` (`make qdrant-key`) + NetworkPolicy che ammette solo i namespace delle app e `monitoring` |
+| Metriche | ServiceMonitor su `/metrics` (con la chiave) |
+| Dashboard | `make qdrant-pf` → `http://localhost:6333/dashboard`, chiave da `make qdrant-pass` |
+
+**Aggiungere un'app** (es. `foo`):
+
+1. `foo` nella lista di `platform/qdrant/manifests/networkpolicy.yaml`
+2. `make qdrant-key APP=foo`: copia la chiave dal cluster in `foo-secrets`
+   come `QDRANT_API_KEY` (risigilla `apps/foo/sealed-secret.yaml` tenendo gli
+   altri valori)
+3. `QDRANT_URL` nel configMap dell'app; collection con il nome dell'app come
+   prefisso
+
+I vettori non hanno backup: si ricostruiscono dalle app (FiscoAI: reindex dei
+documenti). Namespace e volume hanno comunque `Prune=false,Delete=false`.
 
 ## Notifiche (notify-hub)
 
@@ -603,8 +639,13 @@ helm upgrade --install argocd argo/argo-cd -n argocd -f platform/argocd/values.y
       valutazione su Haiku via LiteLLM, dati migrati da SQLite
 - [x] **Notifiche (notify-hub)**: Web Push per le app del lab, una chiave VAPID
       e un token per app, niente Ingress; primo client Alfred
+- [x] **FiscoAI**: CRM + RAG per commercialisti su `pg-shared`, primo utente
+      del Qdrant condiviso e degli embedding Voyage via LiteLLM; upload su PVC
+      con tar notturno
+- [ ] Qdrant: chiavi per app (JWT RBAC per collection) al posto della chiave
+      unica, snapshot periodici
 - [ ] Regole di notifica in Alfred, webhook di Alertmanager verso notify-hub
-- [ ] Backup di `pg-shared` fuori dal nodo (S3 / barman-cloud) e LiteLLM su `pg-shared`
+- [ ] Backup di `pg-shared` e degli upload di FiscoAI fuori dal nodo (S3 / barman-cloud) e LiteLLM su `pg-shared`
 - [x] **Zigbee + accensione GPU**: Zigbee2MQTT + Mosquitto, presa smart al posto
       del Wake-on-LAN, `make gpu-on` / `gpu-off` con shutdown pulito
 - [ ] Home Assistant come client MQTT di Zigbee2MQTT

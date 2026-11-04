@@ -1,0 +1,94 @@
+# Qdrant condiviso: il vector store delle app RAG. Endpoint dal cluster:
+#   http://qdrant.qdrant.svc.cluster.local:6333   REST
+#   qdrant.qdrant.svc.cluster.local:6334          gRPC
+#
+# Un solo nodo, quindi uno StatefulSet su local-path come litellm-postgres:
+# niente chart né cluster mode. I vettori si possono sempre ricostruire dalle
+# app (reindex), ma il volume ha comunque Prune=false,Delete=false.
+#
+# Versione pinnata a mano: il client Python delle app (qdrant-client) avvisa se
+# la minor del server si discosta di più di 1 dalla sua.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: qdrant
+  namespace: qdrant
+spec:
+  serviceName: qdrant
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qdrant
+  template:
+    metadata:
+      labels:
+        app: qdrant
+    spec:
+      containers:
+        - name: qdrant
+          image: qdrant/qdrant:v1.17.0
+          ports:
+            - name: http
+              containerPort: 6333
+            - name: grpc
+              containerPort: 6334
+          env:
+            # Chiave unica condivisa dalle app (qdrant-secrets, make qdrant-key).
+            - name: QDRANT__SERVICE__API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: qdrant-secrets
+                  key: QDRANT__SERVICE__API_KEY
+            - name: QDRANT__TELEMETRY_DISABLED
+              value: "true"
+          volumeMounts:
+            - name: storage
+              mountPath: /qdrant/storage
+          # /readyz e /livez non richiedono la chiave.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 6333
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 6333
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+        annotations:
+          argocd.argoproj.io/sync-options: Prune=false,Delete=false
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant
+  namespace: qdrant
+  labels:
+    app: qdrant
+spec:
+  selector:
+    app: qdrant
+  ports:
+    - name: http
+      port: 6333
+      targetPort: 6333
+    - name: grpc
+      port: 6334
+      targetPort: 6334

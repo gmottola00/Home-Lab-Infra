@@ -1,0 +1,20 @@
+# Metriche di Qdrant (/metrics sulla porta REST). Con la API key attiva anche
+# /metrics la richiede: Prometheus la legge dallo stesso secret del server.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: qdrant
+  namespace: qdrant
+spec:
+  selector:
+    matchLabels:
+      app: qdrant
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 60s
+      authorization:
+        type: Bearer
+        credentials:
+          name: qdrant-secrets
+          key: QDRANT__SERVICE__API_KEY

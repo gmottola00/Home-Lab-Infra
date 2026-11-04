@@ -1,0 +1,17 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: pg-role-fiscoai
+  namespace: databases
+spec:
+  encryptedData:
+    password: AgBKUPPnY7GhTy2BVgGyzovV+OtXwquMuEWYOcPGaI1WyznwUgI+I9vsnhEvVoxoI5r0hGz+XMzTtz/dIV+2dCeR/39tG2FyI98GH17RHjr9rfvyXpFVp1Iivk9kj5iATMtR5P/2IEupom7z5hCMZwka91CS0+bSqCIodbL0F95+ppm4C/Kk/MgsFknb9rNUhAEcyDBYQ1zyaRFop+B+/s5c3Wo1RpoRh8Bzqmj6foRTD3BIjN61STFBB5sgYvVgcVJ2K9q/vpNVbwm7Gt0FX7Hqjlw3TgwF7sEE5dMq7vXLX2PllSHrL2CkzPcVJX3P9k+EQ/VoJ3D7Tec9chmNHX8E6pIMAXPvE3wSMVEg6554q+Hytv90U/kzunkt/8N01EMXdDr4BJTkOnU43SLQqprP5JLbe9ZJI35eN3J+oQX/X9Kr7epQ5gfCdxCAEELDdmxLzd/neRIb+DJW9n6fLGgmPGCnRM1IoRevVwg2pe+vEj0kJ5rn5Or2dFvcQxy/CqrJNTFBDKZDyiNpatpwRXn12o7G/vT+2k/Ja2W5pdBg/+j0IeJF6YQM8ThFoD/osIGOdPcw/lrbR31MWzNlTK3D516u5CyGfxBj4XZ9sQiHRio/UJFdwrFx6D9FiGWeFtnAISnYpJO0H+Zg2Wff5y1s4N/tBE/+uQNBNtgJmTSm4WCZi2jz9axx9SFQ0VP5Q6kgmVO7VvWNA+ZhMcHnA5q7QpP9Gc44ZNj98YBLAxAQy44Xx3GSNmPQtSHI
+    username: AgB66cnn4BoUC/X0MMXViHIotLMU82Ra+u+HUZIsPaJY7/gAeK6Vqt1usIhe967dzGVGqci8/lZeamvZ2UR5LW9f2v2gdvOYMvzx9cd3wgWnoqDnZfc7eFfHYCDxrcVXijF8YHCOViQdDHMqdTfmhMHAqM8NDBJo2RXthNyQRtBTxTvi6GWVlItii2ukDrZwtyKT5I/FcNrJfO2qncsvrSzjjy9qg/F74cUm9RPYD+rZwXoiXTi/AQcH70Vzn/l7f6Z4QMtXNUw+ro8j7tB7DXh1Qrf2PshsraySjAqED2lTzz8OELfoODoh5XTHEoxMDZhs/zytefe1U9zgC+U3TlyQMgn3cL991zNLyP7Trqoqs8RamIi7L7FJuW1+1zByChkI40QD3Z9TiQpSPH7nUz2bBiOL1xJyT9nbrPoZ89GU0dtEwrwDHstXgT+YYy7ua/0F8hlRyprTHk9WJPZ9hve+fh7Fdda2Qhfu3cMwvCZaTRkboNo2sPciDiaEs2vAYGqHECM07y94UzP47dxCylqxTih/InhkDa8+RG4VAbsomcLKdVakKgGnADV/wBxKDgqpH6FZd4Asga/yVf0IMZQCgneL1tDaqkUEGrnB09zF+rVne9UIU8H9nXth6y+hpzCQXGsdI1bnoJETYVYDI5ErvFdtJS0pfR4PfkEoIjQdz2BhMKuDAYYinjou3ThTN9Jj5Q2HBSsm
+  template:
+    metadata:
+      labels:
+        cnpg.io/reload: "true"
+      name: pg-role-fiscoai
+      namespace: databases
+    type: kubernetes.io/basic-auth

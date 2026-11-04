@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fiscoai-backend
+  namespace: fiscoai
+spec:
+  # Mai più di 1: l'indicizzazione gira come BackgroundTask nel processo e il
+  # volume degli upload è ReadWriteOnce.
+  replicas: 1
+  # Niente RollingUpdate: due pod insieme lancerebbero le migrazioni Alembic in
+  # parallelo e si contenderebbero il volume.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: fiscoai-backend
+  template:
+    metadata:
+      labels:
+        app: fiscoai-backend
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: backend
+          image: ghcr.io/gmottola00/fiscoai-backend:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            # Gateway, modelli, Qdrant (configMapGenerator: un valore cambiato → rollout).
+            - configMapRef:
+                name: fiscoai-config
+            # LLM_API_KEY (chiave virtuale LiteLLM) e QDRANT_API_KEY.
+            - secretRef:
+                name: fiscoai-secrets
+            # DATABASE_URL verso pg-shared (make pg-user APP=fiscoai); l'app
+            # converte da sola psycopg → asyncpg.
+            - secretRef:
+                name: fiscoai-db
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/data/uploads
+          # /health non tocca DB, gateway né Qdrant. Le migrazioni Alembic
+          # girano nel lifespan prima che risponda: migrazione fallita = pod
+          # mai Ready, e il vecchio dato resta intatto.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            # Il parsing dei PDF (PyMuPDF) è la parte che pesa.
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: fiscoai-uploads
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fiscoai-backend
+  namespace: fiscoai
+spec:
+  selector:
+    app: fiscoai-backend
+  ports:
+    - port: 8000
+      targetPort: 8000
