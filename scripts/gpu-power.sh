@@ -21,7 +21,7 @@ set -euo pipefail
 PLUG=${GPU_PLUG:-gpu-plug}
 HOST=${GPU_HOST:-pop-os.tail682dc3.ts.net}
 SSH_KEY=${GPU_SSH_KEY:-$HOME/.ssh/gpu-poweroff}
-SSH_USER=${GPU_SSH_USER:-$USER}
+SSH_USER=${GPU_SSH_USER:-gm8la}  # utente su pop-os, non quello del nodo
 # Sotto questa soglia il PC è spento (in soft-off un PC tira 1-3 W).
 OFF_WATTS=${GPU_OFF_WATTS:-8}
 TIMEOUT=${GPU_TIMEOUT:-180}
