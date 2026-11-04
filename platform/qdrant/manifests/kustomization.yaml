@@ -13,5 +13,6 @@ resources:
   - statefulset.yaml
   - networkpolicy.yaml
   - servicemonitor.yaml
+  - ingress.yaml
   # qdrant-secrets: QDRANT__SERVICE__API_KEY (make qdrant-key)
   - sealed-secret.yaml

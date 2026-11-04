@@ -252,7 +252,7 @@ qdrant-key: ## Senza APP: nuova chiave sigillata in platform/qdrant. Con APP=x: 
 	@scripts/qdrant-key.sh $(if $(filter command line,$(origin APP)),$(APP))
 
 .PHONY: qdrant-pf
-qdrant-pf: ## Port-forward di Qdrant su localhost:6333 (dashboard su /dashboard, chiave: make qdrant-pass)
+qdrant-pf: ## Port-forward di Qdrant su localhost:6333 (senza tailnet; con la tailnet: https://qdrant.<tailnet>.ts.net/dashboard)
 	kubectl -n qdrant port-forward svc/qdrant 6333:6333
 
 .PHONY: qdrant-pass

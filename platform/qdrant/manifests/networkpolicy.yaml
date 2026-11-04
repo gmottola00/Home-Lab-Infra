@@ -1,4 +1,5 @@
-# Qdrant accetta traffico solo dalle app che lo usano e da Prometheus. La
+# Qdrant accetta traffico solo dalle app che lo usano, da Prometheus e dal proxy
+# del Tailscale Operator (namespace tailscale, per la UI via ingress). La
 # chiave resta il vero controllo; questa policy toglie di mezzo il resto del
 # cluster. Le probe del kubelet partono dal nodo e passano sempre.
 # Una nuova app RAG → il suo namespace nella lista, più QDRANT_API_KEY nel suo
@@ -19,7 +20,7 @@ spec:
             matchExpressions:
               - key: kubernetes.io/metadata.name
                 operator: In
-                values: [fiscoai, monitoring]
+                values: [fiscoai, monitoring, tailscale]
       ports:
         - port: 6333
         - port: 6334

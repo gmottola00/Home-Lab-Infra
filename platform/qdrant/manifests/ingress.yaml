@@ -1,0 +1,18 @@
+# Tailscale Operator ingress → https://qdrant.<tailnet>.ts.net/dashboard
+# Web UI e REST sulla stessa porta (6333). La chiave API resta obbligatoria:
+# `make qdrant-pass`. gRPC (6334) non è esposto, resta solo in-cluster.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: qdrant
+  namespace: qdrant
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: qdrant
+      port:
+        number: 6333
+  tls:
+    - hosts:
+        - qdrant

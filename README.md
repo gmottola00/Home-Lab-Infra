@@ -456,9 +456,9 @@ Postgres di LiteLLM: niente chart, niente cluster mode.
 | | |
 |---|---|
 | Endpoint | `http://qdrant.qdrant.svc.cluster.local:6333` (REST), `:6334` (gRPC) |
-| Accesso | chiave API unica in `qdrant-secrets` (`make qdrant-key`) + NetworkPolicy che ammette solo i namespace delle app e `monitoring` |
+| Accesso | chiave API unica in `qdrant-secrets` (`make qdrant-key`) + NetworkPolicy che ammette solo i namespace delle app, `monitoring` e `tailscale` |
 | Metriche | ServiceMonitor su `/metrics` (con la chiave) |
-| Dashboard | `make qdrant-pf` → `http://localhost:6333/dashboard`, chiave da `make qdrant-pass` |
+| Dashboard | `https://qdrant.<tailnet>.ts.net/dashboard` (ingress Tailscale), chiave da `make qdrant-pass`. Senza tailnet: `make qdrant-pf` → `http://localhost:6333/dashboard` |
 
 **Aggiungere un'app** (es. `foo`):
 
