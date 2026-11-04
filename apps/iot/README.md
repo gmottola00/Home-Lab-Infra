@@ -57,7 +57,7 @@ La chiave è già sul nodo: `~/.ssh/gpu-poweroff` (privata, non si sposta) e
   sudo chmod 440 /etc/sudoers.d/gpu-poweroff
   sudo visudo -c   # deve dire "parsed OK"
   ```
-- [ ] `whoami` su pop-os: se non è `gmottola`, usa `GPU_SSH_USER=<nome> make gpu-off`
+- [ ] `whoami` su pop-os: lo script usa `gm8la`; se cambia, `GPU_SSH_USER=<nome> make gpu-off`
 
 > Qualsiasi connessione con questa chiave **spegne subito pop-os**, anche un
 > `ssh ... true` di prova. Il test vero è il punto 5.
