@@ -58,6 +58,13 @@ La chiave è già sul nodo: `~/.ssh/gpu-poweroff` (privata, non si sposta) e
   sudo visudo -c   # deve dire "parsed OK"
   ```
 - [ ] `whoami` su pop-os: lo script usa `gm8la`; se cambia, `GPU_SSH_USER=<nome> make gpu-off`
+- [ ] **Sul nodo**: host key di pop-os in `~/.ssh/known_hosts` (lo script usa
+  `BatchMode`, non può chiederla). Confronta l'impronta di
+  `ssh-keyscan -t ed25519 pop-os.tail682dc3.ts.net | ssh-keygen -lf -` con quella
+  di `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` su pop-os, poi:
+  ```bash
+  ssh-keyscan -t ed25519 pop-os.tail682dc3.ts.net >> ~/.ssh/known_hosts
+  ```
 
 > Qualsiasi connessione con questa chiave **spegne subito pop-os**, anche un
 > `ssh ... true` di prova. Il test vero è il punto 6.
