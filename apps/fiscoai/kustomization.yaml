@@ -35,4 +35,4 @@ configMapGenerator:
 # newTag by hand.
 images:
   - name: ghcr.io/gmottola00/fiscoai-backend
-    newTag: latest
+    newTag: dd527ea3f7e031869a3a0bdf7d67d88d8c6d2386
