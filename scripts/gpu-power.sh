@@ -94,12 +94,20 @@ off() {
   if ! is_low "$POWER"; then
     test -f "$SSH_KEY" || { echo "manca $SSH_KEY: non stacco la corrente a un PC acceso" >&2; exit 1; }
     echo "shutdown di pop-os via SSH..."
-    local rc=0
-    ssh -i "$SSH_KEY" -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=10 \
-      "$SSH_USER@$HOST" true || rc=$?
-    # 255 è anche la connessione chiusa dal poweroff: lo dicono i watt se è andato.
+    local rc=0 err
+    err=$(ssh -i "$SSH_KEY" -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=10 \
+      "$SSH_USER@$HOST" true 2>&1 >/dev/null) || rc=$?
+    # 255 è anche la connessione chiusa dal poweroff: lo dicono i watt se è
+    # andato. Ma ssh dà 255 pure quando non arriva nemmeno a autenticarsi:
+    # quei casi si riconoscono dallo stderr e non ha senso aspettare i watt.
+    if (( rc == 255 )) && grep -qiE 'host key verification failed|permission denied|connection refused|could not resolve|timed out|no route to host' <<<"$err"; then
+      echo "ssh fallito: ${err//$'\n'/ | }" >&2
+      grep -qi 'host key verification' <<<"$err" &&
+        echo "  → host key di $HOST assente o cambiata in ~/.ssh/known_hosts (vedi apps/iot/README.md, punto 4)" >&2
+      echo "la presa resta ON" >&2; exit 1
+    fi
     if (( rc != 0 && rc != 255 )); then
-      echo "ssh fallito (rc=$rc): la presa resta ON" >&2; exit 1
+      echo "ssh fallito (rc=$rc): ${err:-nessun output}; la presa resta ON" >&2; exit 1
     fi
   fi
   # Tre letture basse di fila (circa 20 s): un PC che sta ancora spegnendo
