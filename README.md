@@ -57,6 +57,7 @@ flowchart LR
             alfred["alfred<br/>web + backend"]
             interview["interview<br/>backend"]
             fiscoai["fiscoai<br/>backend"]
+            ordly["ordly<br/>web + backend"]
             notify["notify-hub<br/>no Ingress"]
         end
 
@@ -74,7 +75,7 @@ flowchart LR
             obs["Prometheus · Loki<br/>Alloy · Grafana"]
         end
 
-        ts --> trip & tick & jarvis & alfred & interview & fiscoai
+        ts --> trip & tick & jarvis & alfred & interview & fiscoai & ordly
         ts --> argo & obs & litellm & z2m
         z2m <--> mqtt
     end
@@ -97,10 +98,11 @@ flowchart LR
 | `trip-ai` · `tickup` · `jarvis` · `alfred` | PWA web, `/api/*` → backend |
 | `interview` | Interview Trainer |
 | `fiscoai` | FiscoAI (CRM + RAG per commercialisti) |
+| `ordly` | Ordly (ordini per attività alimentari), PWA web, `/api/*` → backend |
 | `zigbee` | UI di Zigbee2MQTT |
 
 **Dove stanno i dati:** Supabase (cloud) per Trip-AI e TickUp; `pg-shared`
-in-cluster per Interview Trainer, Alfred, notify-hub e FiscoAI; vettori sul
+in-cluster per Interview Trainer, Alfred, notify-hub, FiscoAI e Ordly; vettori sul
 Qdrant condiviso (FiscoAI); upload di FiscoAI su un PVC suo. LiteLLM ha ancora
 il suo Postgres. Le immagini sono su GHCR, buildate da GitHub Actions nei repo delle app.
 
@@ -142,13 +144,13 @@ al cluster = aggiungere un YAML lì e pushare.
 flowchart TD
     root["root<br/>bootstrap/root-app.yaml<br/><i>kubectl apply, una volta</i>"] --> dir["bootstrap/apps/*.yaml"]
 
-    dir --> a1["trip-ai"] & a2["tickup"] & a3["jarvis"] & a4["alfred"] & a5["interview"] & a6["notify"] & a7["iot"] & a8["fiscoai"]
+    dir --> a1["trip-ai"] & a2["tickup"] & a3["jarvis"] & a4["alfred"] & a5["interview"] & a6["notify"] & a7["iot"] & a8["fiscoai"] & a9["ordly"]
     dir --> p1["litellm"]
     dir --> p2["postgres<br/><i>multi-source</i>"]
     dir --> p3["observability<br/><i>multi-source</i>"]
     dir --> p4["qdrant"]
 
-    a1 & a2 & a3 & a4 & a5 & a6 & a7 & a8 & p1 -.-> k["apps/#lt;nome#gt;/<br/>kustomize"]
+    a1 & a2 & a3 & a4 & a5 & a6 & a7 & a8 & a9 & p1 -.-> k["apps/#lt;nome#gt;/<br/>kustomize"]
     p2 -.-> pc["chart cloudnative-pg<br/>+ platform/postgres/"]
     p3 -.-> oc["chart upstream<br/>+ platform/observability/"]
     p4 -.-> qc["platform/qdrant/manifests<br/>kustomize"]
@@ -176,6 +178,7 @@ apps/
   alfred/                   # assistente personale, client di notify-hub
   notify/                   # notify-hub: Web Push per le app del lab
   iot/                      # Zigbee2MQTT + Mosquitto: prese smart, accensione della GPU
+  ordly/                    # ordini per attività alimentari, multi-tenant su pg-shared
 scripts/                    # helper richiamati dal Makefile (seal, pg-user, rekey, ...)
 legacy/                     # vecchio draft Caddy + docker-compose (riferimento storico)
 ```
@@ -310,6 +313,7 @@ flowchart LR
         al["alfred"]
         iv["interview"]
         fa["fiscoai"]
+        od["ordly"]
     end
 
     subgraph ns["ns: litellm"]
@@ -318,7 +322,7 @@ flowchart LR
         egress["Service ollama-gpu<br/>egress Tailscale"]
     end
 
-    j & t & al & iv & fa -- "sk-virtual" --> proxy
+    j & t & al & iv & fa & od -- "sk-virtual" --> proxy
     proxy --- lpg
     proxy -- "claude-*<br/>ANTHROPIC_API_KEY vera" --> anth["api.anthropic.com"]
     proxy -- "local/*" --> egress -- tailnet --> ollama["Ollama su pop-os:11434<br/>qwen3 30b/14b · qwen2.5-coder"]
@@ -642,6 +646,9 @@ helm upgrade --install argocd argo/argo-cd -n argocd -f platform/argocd/values.y
 - [x] **FiscoAI**: CRM + RAG per commercialisti su `pg-shared`, primo utente
       del Qdrant condiviso e degli embedding Voyage via LiteLLM; upload su PVC
       con tar notturno
+- [x] **Ordly**: ordini → preparazione → consegna → incasso per attività
+      alimentari, multi-tenant con token per attività su `pg-shared`, Claude
+      via LiteLLM; `make ordly-tenant NAME=...` crea un'attività
 - [ ] Qdrant: chiavi per app (JWT RBAC per collection) al posto della chiave
       unica, snapshot periodici
 - [ ] Regole di notifica in Alfred, webhook di Alertmanager verso notify-hub

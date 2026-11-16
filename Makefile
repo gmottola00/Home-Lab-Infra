@@ -259,6 +259,13 @@ qdrant-pf: ## Port-forward di Qdrant su localhost:6333 (senza tailnet; con la ta
 qdrant-pass: ## Stampa la chiave API di Qdrant (per la dashboard)
 	@kubectl -n qdrant get secret qdrant-secrets -o jsonpath='{.data.QDRANT__SERVICE__API_KEY}' | base64 -d; echo
 
+##@ Ordly
+
+.PHONY: ordly-tenant
+ordly-tenant: ## Crea un'attività su Ordly e stampa il token del titolare (NAME="Pescheria Rossi", SECTOR=fish)
+	@test -n "$(NAME)" || { echo 'uso: make ordly-tenant NAME="Pescheria Rossi" [SECTOR=fish]'; exit 1; }
+	kubectl -n ordly exec deploy/ordly-backend -- python -m ordly.bootstrap "$(NAME)" --sector $(or $(SECTOR),generic)
+
 ##@ Notifiche (notify-hub)
 
 .PHONY: notify-vapid
