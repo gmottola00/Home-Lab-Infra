@@ -30,4 +30,4 @@ images:
   - name: ghcr.io/gmottola00/ordly-backend
     newTag: 72c9c21a660b9d1273608c50572697aed5876071
   - name: ghcr.io/gmottola00/ordly-web
-    newTag: latest
+    newTag: 72c9c21a660b9d1273608c50572697aed5876071
