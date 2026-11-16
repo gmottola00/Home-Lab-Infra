@@ -1,0 +1,21 @@
+# Tailscale Operator ingress: crea un device "ordly" sulla tailnet con
+# certificato Let's Encrypt → https://ordly.<tailnet>.ts.net, raggiungibile
+# anche dal telefono connesso alla tailnet.
+# Tutto il traffico arriva al web; nginx serve il sito e inoltra /api.
+# La tailnet è il perimetro; dentro, ogni attività entra con il suo token
+# (make ordly-tenant NAME=...), e i dati restano isolati per tenant.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ordly
+  namespace: ordly
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: ordly-web
+      port:
+        number: 80
+  tls:
+    - hosts:
+        - ordly

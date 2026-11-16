@@ -71,3 +71,8 @@ spec:
         login: true
         passwordSecret:
           name: pg-role-fiscoai
+      - name: ordly
+        ensure: present
+        login: true
+        passwordSecret:
+          name: pg-role-ordly
