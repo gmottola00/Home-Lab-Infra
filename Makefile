@@ -259,6 +259,25 @@ qdrant-pf: ## Port-forward di Qdrant su localhost:6333 (senza tailnet; con la ta
 qdrant-pass: ## Stampa la chiave API di Qdrant (per la dashboard)
 	@kubectl -n qdrant get secret qdrant-secrets -o jsonpath='{.data.QDRANT__SERVICE__API_KEY}' | base64 -d; echo
 
+##@ Login (tsidp)
+
+.PHONY: tsidp-key
+tsidp-key: ## Auth key del nodo idp (tag:tsidp): letta senza eco, sigillata in platform/tsidp
+	@read -rsp "Auth key (tskey-auth-...): " k; echo; \
+		printf %s "$$k" | scripts/secret-add.sh tsidp tsidp-authkey TS_AUTHKEY \
+			platform/tsidp/manifests/sealed-secret.yaml
+	@echo "→ commit + push; ArgoCD avvia tsidp e il nodo idp compare nella tailnet"
+
+.PHONY: tsidp-status
+tsidp-status: ## Pod e volume di tsidp, proxy egress, e se il cluster raggiunge l'issuer
+	@kubectl -n tsidp get pods,pvc,svc
+	@echo
+	@kubectl -n tailscale get pods,svc -l tailscale.com/parent-resource=idp-tailnet
+	@kubectl -n tailscale get svc tsidp-egress
+	@echo
+	@kubectl run tsidp-check-$$$$ --rm -i --restart=Never -q --image=curlimages/curl:8.17.0 -- \
+		-sS --max-time 10 https://idp.tail682dc3.ts.net/.well-known/openid-configuration
+
 ##@ Ordly
 
 .PHONY: ordly-tenant

@@ -1,0 +1,16 @@
+# Login con l'identità Tailscale (tsidp). Vedi statefulset.yaml e il README,
+# sezione "Login con Tailscale (tsidp)".
+#
+# Aggiungere un servizio (es. Grafana):
+#   1. https://idp.tail682dc3.ts.net → Add New Client, redirect URI del servizio
+#   2. client ID e secret sigillati nel secret del servizio
+#   3. issuer https://idp.tail682dc3.ts.net nella sua config OIDC
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - statefulset.yaml
+  - egress.yaml
+  - coredns.yaml
+  # tsidp-authkey: TS_AUTHKEY (make tsidp-key)
+  - sealed-secret.yaml

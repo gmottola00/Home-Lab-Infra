@@ -17,7 +17,7 @@ dopo il bootstrap. Obiettivo: infra comune per le mie app e palestra di architet
 
 - [Stack](#stack) · [Architettura](#architettura) · [Flusso di deploy](#flusso-di-deploy-gitops) · [Struttura](#struttura)
 - [Comandi quotidiani](#comandi-quotidiani) · [Bootstrap](#bootstrap-del-cluster-una-volta-sola) · [Nuova app](#aggiungere-una-nuova-app-il-pattern)
-- [Gateway LLM](#gateway-llm-litellm) · [Postgres](#postgres-condiviso-cloudnativepg) · [Qdrant](#qdrant-condiviso) · [Notifiche](#notifiche-notify-hub) · [Zigbee e GPU](#zigbee-e-gpu-iot) · [Observability](#observability)
+- [Gateway LLM](#gateway-llm-litellm) · [Postgres](#postgres-condiviso-cloudnativepg) · [Qdrant](#qdrant-condiviso) · [Login Tailscale](#login-con-tailscale-tsidp) · [Notifiche](#notifiche-notify-hub) · [Zigbee e GPU](#zigbee-e-gpu-iot) · [Observability](#observability)
 - [Adattarlo al tuo setup](#adattarlo-al-tuo-setup) · [Roadmap](#fasi-future) · [Licenza](#licenza)
 
 ## Stack
@@ -473,6 +473,55 @@ Postgres di LiteLLM: niente chart, niente cluster mode.
 
 I vettori non hanno backup: si ricostruiscono dalle app (FiscoAI: reindex dei
 documenti). Namespace e volume hanno comunque `Prune=false,Delete=false`.
+
+## Login con Tailscale (tsidp)
+
+`platform/tsidp/manifests`, Application `tsidp` (wave 1): un provider OIDC
+([tsidp](https://github.com/tailscale/tsidp)) che riconosce chi sei dalla
+tailnet. I servizi condivisi che supportano OIDC (Grafana, Argo CD, ...) lo
+usano come "Accedi con…" e ti fanno entrare senza password.
+
+| | |
+|---|---|
+| Issuer | `https://idp.<tailnet>.ts.net` (dispositivo `idp`, `tag:tsidp`) |
+| Client OIDC | UI di gestione allo stesso URL (solo admin della tailnet) |
+| Stato | volume `/data` (identità del nodo, client, chiavi di firma): perderlo = ri-registrare tutto |
+| Dal cluster | proxy egress dell'operator + rewrite CoreDNS: i pod usano lo stesso URL del browser |
+
+tsidp è un nodo della tailnet (tsnet), non sta dietro un ingress. Il login nel
+browser passa dalla tailnet; le chiamate server-side (codice → token, JWKS)
+partono invece dai pod, che non sono sulla tailnet. `egress.yaml` crea un proxy
+egress verso `idp` e `coredns.yaml` fa risolvere `idp.<tailnet>.ts.net` a quel
+proxy: il TLS arriva intatto a tsidp, quindi il certificato combacia.
+
+**Prima installazione** (una volta sola):
+
+1. Policy della tailnet (admin console → Access controls):
+
+   ```jsonc
+   "tagOwners": { "tag:tsidp": ["autogroup:admin"] },
+   "grants": [
+     // Login: ogni membro raggiunge idp; solo gli admin gestiscono i client.
+     { "src": ["autogroup:member"], "dst": ["tag:tsidp"], "ip": ["443"] },
+     { "src": ["autogroup:admin"], "dst": ["tag:tsidp"],
+       "app": { "tailscale.com/cap/tsidp": [{ "allow_admin_ui": true, "allow_dcr": false }] } },
+     // Il proxy egress del cluster chiama token e JWKS.
+     { "src": ["tag:k8s"], "dst": ["tag:tsidp"], "ip": ["443"] }
+   ]
+   ```
+
+2. Auth key (Settings → Keys): non riutilizzabile, non effimera, pre-approvata,
+   tag `tag:tsidp`. Poi `make tsidp-key` (la legge senza eco e la sigilla),
+   commit + push.
+3. `make tsidp-status`: pod Running, proxy egress pronto, e la discovery OIDC
+   che risponde anche da dentro il cluster.
+
+**Aggiungere un servizio**: su `https://idp.<tailnet>.ts.net` → *Add New
+Client* con la redirect URI del servizio; client ID e secret sigillati nel
+secret del servizio; issuer `https://idp.<tailnet>.ts.net` nella sua config.
+
+tsidp è pre-1.0 e il formato dei grants può cambiare: l'immagine è pinnata e va
+aggiornata a mano, leggendo le release note.
 
 ## Notifiche (notify-hub)
 

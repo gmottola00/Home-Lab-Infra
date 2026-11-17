@@ -1,0 +1,8 @@
+# Namespace del provider di login. ArgoCD non lo cancella mai: con lui se ne
+# andrebbe il volume con i client OIDC registrati e l'identità del nodo.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tsidp
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
