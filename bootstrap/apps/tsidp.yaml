@@ -18,10 +18,20 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: tsidp
+  # externalName del Service egress lo scrive l'operator (punta al suo proxy):
+  # senza ignorarlo ArgoCD lo riporterebbe a "placeholder" a ogni self-heal.
+  ignoreDifferences:
+    - kind: Service
+      name: idp-tailnet
+      namespace: tsidp
+      jsonPointers:
+        - /spec/externalName
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true
     retry:
       limit: 10
       backoff:
