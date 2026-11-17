@@ -7,24 +7,27 @@
 #
 # Uso (dalla root del repo, di solito tramite make):
 #   scripts/notify-token.sh <app>
+#   scripts/notify-token.sh <chiamante> <namespace> <file>   per chi non sta in
+#     apps/ (es. alertmanager in monitoring, vedi make notify-alerts-token)
 # Rilanciarlo ruota il token: dopo il sync riavvia il backend dell'app (l'hub
 # si riavvia da solo, il ConfigMap generato cambia nome).
 # Ricorda anche il namespace dell'app in apps/notify/networkpolicy.yaml.
 set -euo pipefail
 
 app=${1:?app mancante}
-test -d "apps/$app" || { echo "apps/$app non esiste" >&2; exit 1; }
+ns=${2:-$app}
+out=${3:-apps/$app/notify-sealed-secret.yaml}
+test -d "$(dirname "$out")" || { echo "$(dirname "$out") non esiste" >&2; exit 1; }
 kust="apps/notify/kustomization.yaml"
-out="apps/$app/notify-sealed-secret.yaml"
 
 NOTIFY_TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
-export NOTIFY_TOKEN APP="$app"
+export NOTIFY_TOKEN APP="$app" NS="$ns"
 
 python3 -c '
 import base64, json, os, sys
 app, tok = os.environ["APP"], os.environ["NOTIFY_TOKEN"]
 json.dump({"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
-           "metadata": {"name": f"{app}-notify", "namespace": app},
+           "metadata": {"name": f"{app}-notify", "namespace": os.environ["NS"]},
            "data": {"NOTIFY_TOKEN": base64.b64encode(tok.encode()).decode()}}, sys.stdout)' \
   | kubeseal --controller-namespace kube-system -o yaml > "$out"
 
@@ -41,5 +44,9 @@ line = m.group(1) + json.dumps(dict(sorted(apps.items())), separators=(",", ":")
 open(path, "w").write(text[: m.start()] + line + text[m.end():])'
 
 echo "$app: scritti $out e l'hash in $kust"
-echo "→ $out nelle resources di apps/$app/kustomization.yaml, secretRef $app-notify nel Deployment,"
-echo "  $app in apps/notify/networkpolicy.yaml; poi commit + push e rollout restart di $app-backend"
+if [ $# -ge 3 ]; then
+  echo "→ $out nella sua kustomization, $ns in apps/notify/networkpolicy.yaml; poi commit + push"
+else
+  echo "→ $out nelle resources di apps/$app/kustomization.yaml, secretRef $app-notify nel Deployment,"
+  echo "  $app in apps/notify/networkpolicy.yaml; poi commit + push e rollout restart di $app-backend"
+fi

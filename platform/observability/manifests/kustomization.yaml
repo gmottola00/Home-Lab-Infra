@@ -10,3 +10,5 @@ resources:
   - grafana-admin-sealed-secret.yaml
   # Client OIDC di tsidp per il login automatico (make oidc-client NAME=grafana).
   - grafana-oidc-sealed-secret.yaml
+  # Token di Alertmanager per notify-hub (make notify-alerts-token).
+  - alertmanager-notify-sealed-secret.yaml

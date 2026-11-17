@@ -60,11 +60,40 @@ prometheus:
               storage: 25Gi
 
 # --- Alertmanager ------------------------------------------------------------
-# Installato ma muto: nessun receiver esterno finché non sappiamo quali alert sono
-# davvero utili. Le alert restano visibili in Grafana e nella UI di Alertmanager.
+# Le allerte warning e critical arrivano sul telefono: webhook verso notify-hub
+# (/v1/alertmanager), che le consegna ai dispositivi iscritti ad Alfred
+# (NOTIFY_ALERT_ROUTES in apps/notify). Watchdog e info restano mute.
 # Il volume serve solo a non perdere i silenzi ai restart.
 alertmanager:
+  config:
+    # Le mappe si fondono con i default del chart (inhibit_rules, templates
+    # restano); le liste qui sotto sostituiscono quelle di default.
+    route:
+      receiver: "null"
+      group_by: [alertname, namespace]
+      group_wait: 30s
+      group_interval: 5m
+      # Un'allerta ancora attiva si ripresenta due volte al giorno, non di più.
+      repeat_interval: 12h
+      routes:
+        - receiver: "null"
+          matchers: ['alertname = "Watchdog"']
+        - receiver: phone
+          matchers: ['severity =~ "warning|critical"']
+    receivers:
+      - name: "null"
+      - name: phone
+        webhook_configs:
+          - url: http://notify-backend.notify.svc.cluster.local:8000/v1/alertmanager
+            send_resolved: true
+            http_config:
+              authorization:
+                type: Bearer
+                # Secret alertmanager-notify (make notify-alerts-token), montato
+                # dall'operator tramite alertmanagerSpec.secrets.
+                credentials_file: /etc/alertmanager/secrets/alertmanager-notify/NOTIFY_TOKEN
   alertmanagerSpec:
+    secrets: [alertmanager-notify]
     storage:
       volumeClaimTemplate:
         spec:
