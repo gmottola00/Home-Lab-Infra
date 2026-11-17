@@ -1,0 +1,45 @@
+# Come i pod del cluster (Grafana, Argo CD) raggiungono tsidp, che vive solo
+# sulla tailnet. Il login nel browser passa dalla tailnet; lo scambio del codice
+# col token e le chiavi di firma (JWKS) invece li chiama il server del servizio,
+# da dentro il cluster.
+#
+#   1. idp-tailnet: Service egress del Tailscale Operator. L'operator crea un
+#      proxy (namespace tailscale) che inoltra tutto a idp.tail682dc3.ts.net.
+#   2. tsidp-egress: ClusterIP con un nome fisso davanti a quel proxy, perché il
+#      Service che crea l'operator ha un suffisso casuale.
+#   3. coredns.yaml riscrive idp.tail682dc3.ts.net → tsidp-egress.
+#
+# Il proxy inoltra TCP così com'è: il TLS termina su tsidp con il suo
+# certificato Let's Encrypt, valido per lo stesso nome usato nel browser.
+apiVersion: v1
+kind: Service
+metadata:
+  name: idp-tailnet
+  namespace: tsidp
+  annotations:
+    tailscale.com/tailnet-fqdn: idp.tail682dc3.ts.net
+spec:
+  type: ExternalName
+  # Sovrascritto dall'operator con il Service del proxy.
+  externalName: placeholder
+  ports:
+    - name: https
+      port: 443
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tsidp-egress
+  # Stesso namespace dei pod proxy, che sono creati dall'operator.
+  namespace: tailscale
+spec:
+  selector:
+    tailscale.com/parent-resource: idp-tailnet
+    tailscale.com/parent-resource-ns: tsidp
+    tailscale.com/parent-resource-type: svc
+  ports:
+    - name: https
+      port: 443
+      targetPort: 443
+      protocol: TCP

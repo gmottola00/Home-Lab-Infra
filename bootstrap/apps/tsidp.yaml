@@ -1,0 +1,30 @@
+# Login con l'identità Tailscale (platform/tsidp/manifests): provider OIDC per
+# Grafana, Argo CD e gli altri servizi condivisi.
+# Wave 1: piattaforma, prima delle app (wave 2). Tocca anche kube-system
+# (coredns-custom) e tailscale (Service davanti al proxy egress).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tsidp
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:gmottola00/Home-Lab-Infra.git
+    targetRevision: main
+    path: platform/tsidp/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tsidp
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

@@ -1,0 +1,17 @@
+# Dentro il cluster idp.tail682dc3.ts.net punta al proxy egress (egress.yaml),
+# così i servizi usano lo stesso issuer del browser e il certificato combacia.
+#
+# k3s importa da solo coredns-custom (*.override nel blocco principale).
+# "answer auto" riporta il nome originale nella risposta: senza, il client
+# riceverebbe un record per tsidp-egress... e lo scarterebbe.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  tsidp.override: |
+    rewrite stop {
+      name exact idp.tail682dc3.ts.net tsidp-egress.tailscale.svc.cluster.local
+      answer auto
+    }

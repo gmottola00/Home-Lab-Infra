@@ -1,0 +1,76 @@
+# tsidp: provider OIDC che usa l'identità Tailscale. Un servizio che supporta
+# "Accedi con OIDC" (Grafana, Argo CD, ...) ti fa entrare senza password, perché
+# tsidp sa già chi sei dalla tailnet.
+#
+#   Issuer: https://idp.tail682dc3.ts.net (UI di gestione dei client: stesso URL)
+#
+# Non ha Service né ingress: è lui stesso un dispositivo della tailnet (tsnet,
+# hostname "idp", tag:tsidp) e ascolta solo lì. I pod del cluster lo
+# raggiungono tramite egress.yaml + coredns.yaml.
+#
+# Stato (identità del nodo, client OIDC, chiavi di firma) nel volume /data:
+# perderlo vuol dire ri-registrare il nodo e tutti i client.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tsidp
+  namespace: tsidp
+spec:
+  serviceName: tsidp
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tsidp
+  template:
+    metadata:
+      labels:
+        app: tsidp
+    spec:
+      securityContext:
+        # Utente "app" dell'immagine.
+        runAsUser: 1001
+        runAsGroup: 1001
+        runAsNonRoot: true
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: tsidp
+          # Pre-1.0: pinnato a mano, il formato dei grants può cambiare tra release.
+          image: ghcr.io/tailscale/tsidp:v0.0.20
+          args:
+            - -dir=/data
+            - -hostname=idp
+          env:
+            # Obbligatoria finché tsidp è sotto la v1.0.0.
+            - name: TAILSCALE_USE_WIP_CODE
+              value: "1"
+            # Serve solo alla prima registrazione (auth key con tag:tsidp,
+            # make tsidp-key); dopo l'identità del nodo è in /data.
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: tsidp-authkey
+                  key: TS_AUTHKEY
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        storageClassName: local-path
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 1Gi
