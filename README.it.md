@@ -517,7 +517,9 @@ proxy: il TLS arriva intatto a tsidp, quindi il certificato combacia.
        "app": { "tailscale.com/cap/tsidp": [{
          "allow_admin_ui": true, "allow_dcr": false,
          // Ruoli nei servizi (claim nel token e in /userinfo).
-         "extraClaims": { "grafana_role": "Admin" }, "includeInUserInfo": true
+         // email_verified: Mathesar collega il login all'utente solo se l'email è verificata.
+         "extraClaims": { "grafana_role": "Admin", "email_verified": true },
+         "includeInUserInfo": true
        }] } },
      // Il proxy egress del cluster chiama token e JWKS.
      { "src": ["tag:k8s"], "dst": ["tag:tsidp"], "ip": ["443"] }
@@ -538,7 +540,9 @@ servizio.
 
 **Ruoli**: li decide la policy della tailnet, con `extraClaims` nel grant
 tsidp. Oggi `grafana_role: "Admin"` per gli admin; gli altri membri entrano in
-Grafana come Viewer.
+Grafana come Viewer. tsidp non manda `email_verified`: lo aggiunge il grant
+(`"email_verified": true`), altrimenti Mathesar non riconosce l'utente e il
+login torna alla pagina di accesso.
 
 | Servizio | Login | Emergenza (tsidp giù) |
 |---|---|---|
