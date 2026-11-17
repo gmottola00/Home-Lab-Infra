@@ -300,6 +300,10 @@ notify-token: ## Token di APP per l'hub: sigilla apps/APP/notify-sealed-secret.y
 	$(call check-app)
 	@scripts/notify-token.sh $(APP)
 
+.PHONY: notify-alerts-token
+notify-alerts-token: ## Token di Alertmanager per l'hub (allerte sul telefono via Alfred): secret in monitoring + hash in NOTIFY_APPS
+	@scripts/notify-token.sh alertmanager monitoring platform/observability/manifests/alertmanager-notify-sealed-secret.yaml
+
 .PHONY: notify-subs
 notify-subs: ## Dispositivi iscritti per app (dal DB notify)
 	@kubectl -n databases exec -i $(PG_PRIMARY) -c postgres -- psql -d notify \
