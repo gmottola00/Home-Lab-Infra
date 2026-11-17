@@ -576,6 +576,12 @@ make notify-token APP=alfred     # NOTIFY_TOKEN di Alfred + hash in NOTIFY_APPS
 make notify-subs                 # dispositivi iscritti
 ```
 
+**Allerte del cluster sul telefono**: Alertmanager manda le allerte `warning` e
+`critical` a `/v1/alertmanager` con il suo token (`make notify-alerts-token`,
+secret `monitoring/alertmanager-notify`); l'hub le consegna ai dispositivi di
+Alfred secondo `NOTIFY_ALERT_ROUTES`. 🔴 critical, 🟠 warning, ✅ quando
+rientrano; per zittirne una, un silence dalla UI di Alertmanager.
+
 ## Zigbee e GPU (`iot`)
 
 Un dongle **Sonoff ZBDongle-E** sul nodo e due prese **Sonoff S60ZBTPF** (misurano i watt):
