@@ -76,3 +76,18 @@ spec:
         login: true
         passwordSecret:
           name: pg-role-ordly
+      # Dati interni di Mathesar (utenti, query salvate): database "mathesar".
+      - name: mathesar
+        ensure: present
+        login: true
+        passwordSecret:
+          name: pg-role-mathesar
+      # Sola lettura su tutti i database: Mathesar (accesso ai dati) e i
+      # pannelli di Grafana. pg_read_all_data = SELECT e USAGE ovunque, anche
+      # sulle tabelle future; nessuna scrittura.
+      - name: readonly
+        ensure: present
+        login: true
+        inRoles: [pg_read_all_data]
+        passwordSecret:
+          name: pg-role-readonly
