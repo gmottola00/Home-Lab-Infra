@@ -563,7 +563,7 @@ calcolo (filtri, ordinamenti, relazioni, query salvate) su
 
 **Prima installazione**: `make mathesar-secrets` (ruoli `mathesar` e `readonly`,
 `SECRET_KEY`); client su tsidp con redirect
-`https://mathesar.<tailnet>.ts.net/auth/oidc/tsidp/login/callback/` e
+`https://mathesar.<tailnet>.ts.net/auth/oidc/tailscale/login/callback/` e
 `make oidc-client NAME=mathesar`; dopo il sync `make mathesar-connect`.
 
 **Un database nuovo** (un prodotto in più): dopo il suo `databases/<app>.yaml`,

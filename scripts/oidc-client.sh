@@ -25,7 +25,7 @@ case "$name" in
     secret=mathesar-sso
     format=mathesar
     out=platform/mathesar/manifests/sso-sealed-secret.yaml
-    redirect=https://mathesar.tail682dc3.ts.net/auth/oidc/tsidp/login/callback/
+    redirect=https://mathesar.tail682dc3.ts.net/auth/oidc/tailscale/login/callback/
     ;;
   *)
     echo "servizio sconosciuto: $name (aggiungilo in scripts/oidc-client.sh)" >&2
