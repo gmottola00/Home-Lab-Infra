@@ -1,0 +1,128 @@
+# Mathesar: i database delle app come fogli di calcolo, dal browser e dal
+# telefono → https://mathesar.tail682dc3.ts.net
+#
+#   - login solo con l'identità Tailscale (tsidp, SSO_CONFIG_DICT nel secret
+#     mathesar-sso, make oidc-client NAME=mathesar); password disattivate
+#   - dati interni nel database "mathesar" su pg-shared (backup notturno incluso)
+#   - accesso ai database delle app col ruolo readonly (make mathesar-connect)
+#
+# L'immagine pubblicata include un Postgres "di riserva": con le variabili
+# POSTGRES_* impostate non parte. -s all'avvio = migrazioni + file statici
+# (serviti da whitenoise, niente Caddy).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mathesar
+  namespace: mathesar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mathesar
+  template:
+    metadata:
+      labels:
+        app: mathesar
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mathesar
+          # Versione pinnata: un aggiornamento reinstalla le funzioni SQL nei
+          # database collegati → dopo l'upgrade rilancia make mathesar-connect.
+          image: mathesar/mathesar:0.12.0
+          command: ["bash", "./bin/mathesar", "run", "-nse"]
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: DJANGO_SETTINGS_MODULE
+              value: config.settings.production
+            - name: ALLOWED_HOSTS
+              value: mathesar.tail682dc3.ts.net,localhost,127.0.0.1
+            - name: DEBUG
+              value: "false"
+            - name: WEB_CONCURRENCY
+              value: "2"
+            - name: POSTGRES_HOST
+              value: pg-shared-rw.databases.svc.cluster.local
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: mathesar
+            - name: POSTGRES_USER
+              value: mathesar
+            - name: MATHESAR_INSTANCE_NAME
+              value: Home Lab
+            # Solo login con tsidp: si attiva solo se SSO_CONFIG_DICT ha un provider.
+            - name: REQUIRE_SSO_LOGIN
+              value: "true"
+          envFrom:
+            # POSTGRES_PASSWORD, SECRET_KEY (make mathesar-secrets)
+            - secretRef:
+                name: mathesar-secrets
+            # SSO_CONFIG_DICT (make oidc-client NAME=mathesar)
+            - secretRef:
+                name: mathesar-sso
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          # Le migrazioni al primo avvio richiedono un po'.
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /auth/login/
+              port: http
+              httpHeaders:
+                - name: Host
+                  value: localhost
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 768Mi
+          volumeMounts:
+            # /code è dell'utente root nell'immagine: le sole cartelle scritte
+            # a runtime diventano volumi temporanei.
+            - name: static
+              mountPath: /code/static
+            - name: media
+              mountPath: /code/.media
+            - name: secrets
+              mountPath: /code/.secrets
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: static
+          emptyDir: {}
+        - name: media
+          emptyDir: {}
+        - name: secrets
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mathesar
+  namespace: mathesar
+spec:
+  selector:
+    app: mathesar
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

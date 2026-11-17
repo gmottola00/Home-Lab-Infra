@@ -1,0 +1,19 @@
+# Mathesar si raggiunge solo dal proxy Tailscale (namespace tailscale): niente
+# accesso diretto dal resto del cluster. Le probe del kubelet passano sempre.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mathesar
+  namespace: mathesar
+spec:
+  podSelector:
+    matchLabels:
+      app: mathesar
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: tailscale
+      ports:
+        - port: 8000

@@ -1,0 +1,16 @@
+# Device "mathesar" sulla tailnet → https://mathesar.tail682dc3.ts.net
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mathesar
+  namespace: mathesar
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: mathesar
+      port:
+        number: 80
+  tls:
+    - hosts:
+        - mathesar

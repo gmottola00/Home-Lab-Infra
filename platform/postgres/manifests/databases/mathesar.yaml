@@ -1,0 +1,14 @@
+# Database interno di Mathesar (platform/mathesar): utenti, collegamenti ai
+# database delle app, query salvate. I dati delle app restano nei loro database.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: pg-shared-mathesar
+  namespace: databases
+spec:
+  cluster:
+    name: pg-shared
+  name: mathesar
+  owner: mathesar
+  # Default esplicito: togliere questo CR non fa DROP DATABASE.
+  databaseReclaimPolicy: retain

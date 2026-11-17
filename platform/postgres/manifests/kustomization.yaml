@@ -14,9 +14,12 @@ resources:
   - databases/notify.yaml
   - databases/fiscoai.yaml
   - databases/ordly.yaml
+  - databases/mathesar.yaml
   # Password dei ruoli (basic-auth, sigillate da `make pg-user APP=...`).
   - roles/interview-sealed.yaml
   - roles/alfred-sealed.yaml
   - roles/notify-sealed.yaml
   - roles/fiscoai-sealed.yaml
   - roles/ordly-sealed.yaml
+  - roles/mathesar-sealed.yaml
+  - roles/readonly-sealed.yaml

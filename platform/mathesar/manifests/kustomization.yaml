@@ -1,0 +1,12 @@
+# Mathesar (vedi deployment.yaml e il README, sezione "Dati dei database").
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - ingress.yaml
+  - networkpolicy.yaml
+  # mathesar-secrets: POSTGRES_PASSWORD, SECRET_KEY, READONLY_PASSWORD (make mathesar-secrets)
+  - sealed-secret.yaml
+  # mathesar-sso: SSO_CONFIG_DICT con il client tsidp (make oidc-client NAME=mathesar)
+  - sso-sealed-secret.yaml

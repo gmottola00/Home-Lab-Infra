@@ -1,0 +1,6 @@
+# Mathesar non tiene stato nel namespace (i suoi dati sono nel database
+# "mathesar" su pg-shared): può essere cancellato e ricreato senza perdite.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mathesar

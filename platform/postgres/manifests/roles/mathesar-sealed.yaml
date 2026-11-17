@@ -1,0 +1,17 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: pg-role-mathesar
+  namespace: databases
+spec:
+  encryptedData:
+    password: AgAwKFUD588mWlkiiy2IHtKZeYbXf+gWxGGUNwatUfOAgta0SzEcz8Cmus8/t/SvpcMgvUWbcrgw4OLwIbkGSvQ5MnsEs8btwjkdPCShxyW4J8eznYoKfDUk745l8DfeoeD/5aYi5mTyHq5O8xxx1PnJUb7hwFN4uKEL6DeXWLpoI9HUKhOCi5pCgmToyRuxe4GHq1h9KvLV8T6MpNpoyHTTfr0YjCdDRfhFLnKe9IWATAmltZWKqGkQyyRzjCmVpiuCB4bl+4WYaQoRCnP+QzxAf7DB17EWDPIB0O2l7aeZRCJCPvefAMwf1FAm1Pc7QfhSeCul8mPI6i7+VPV38Kraor3Siu14qW47naRVALRVjgoNdxhVQKAz99sXm41y6k2alzKXfclyvKS4Hz3uaVb2kE7vdi1qsarshA8z5MEq7+5lCscqTbIUnxC+WBsv63ED3uLfP3zvtNlRzrjIPggkMq7d/SGP4rpDxrNLUCXRG0gmJ8LdahKd/DzJ/b4XDay4OOtf4hrMwiqxibPh8ndL+goEpq7kZrMi1cZb2br4noTAMBbnlHPEYXt3TINlficz4V7DyEudwaxG4R8kCGUuzkakpLgrqce17GvWsic7U9Y4/4o0j8GIKDpgUcTDnl8Bpey8nERZzcG/q9hf2Ji8yXADka9dj207axMhshmzm9Ab1LwHC73lF5n68KU38Kt/ThBEDzvOEiCRDKp1mCCwH9XGhJXZiTfWXUDC7a1nR0b6E90OKpewlpfG
+    username: AgAQZta1QcE590zKwIqizDQn561O2pJ9Dm9afduc9/2vNOSOyZC/HUjL4gLPokc+/PGJ+ZQ10xt+LoDb4D6UYwLuLnswBx5PcUCQA95K/ZJvPM4Qf+8I0GlhVL6mVLc4ZJ0Knnptu89Rj0T6FbSa26VVcM5oZqt4orc6AdwHtWX7wAZyIgkDIe9nBYLBt8MhgHbeuf8GMb2t/WPDPy2C3MX/p6Api1xdfM0TXN67VsCDJwcsnijU5q9nc4fM+0DRJfWKy98VSo6oKwrKIrrgp4e/jPFiHsnaMsaTG2uUCp4IoxpiaywH1YAHog0dYIu+TvvFM7EAUAe5/x4S1dB7KR/TSrAHv8gUmsoXx8axFdhvJR036Q8IcaaTfv4DCLj0na9WobU+bPYYLW1f9Lk+xxlU6M90R+TpYxS57wMpJFxnZw/lSLzkaMU/9/w/A6b9cK2dTQXm8leVi/9ZCkZ/AoZAhWYh/XGSYiEdQ6sEZ6PSsTX6ou+hAAwlzLiq00xUJzzh9o1rPoI51IFjq9BQrWQid7n6ToPbdVNwCocsXbmXgZ7uJQ/mIZzDVImyOYcNJyxuXDV5WB2Fopnuyx12s6RzbygDCFYLroLMvCXD9b6//sjfNZm+6AGbhS3l/ag0f3nQD77w/bBDm7gm6gBPqhMTDkt0De+pYM4GvIuI61FQBS7e7QwjHNxdvXbW2O4AXFcTLC8W0uOVbA==
+  template:
+    metadata:
+      labels:
+        cnpg.io/reload: "true"
+      name: pg-role-mathesar
+      namespace: databases
+    type: kubernetes.io/basic-auth

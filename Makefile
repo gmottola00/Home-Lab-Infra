@@ -282,6 +282,16 @@ tsidp-status: ## Pod e volume di tsidp, proxy egress, e se il cluster raggiunge 
 oidc-client: ## Client OIDC di tsidp per NAME (es. grafana): ID e secret letti senza eco e sigillati
 	@scripts/oidc-client.sh $(NAME)
 
+##@ Mathesar (dati dei database)
+
+.PHONY: mathesar-secrets
+mathesar-secrets: ## Password dei ruoli mathesar e readonly + SECRET_KEY, sigillate (rilanciarlo le ruota)
+	@scripts/mathesar-secrets.sh
+
+.PHONY: mathesar-connect
+mathesar-connect: ## Collega a Mathesar tutti i database di pg-shared (readonly) e crea l'admin (EMAIL=login tsidp)
+	@scripts/mathesar-connect.sh $(or $(EMAIL),$(shell git config user.email))
+
 ##@ Ordly
 
 .PHONY: ordly-tenant

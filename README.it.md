@@ -17,7 +17,7 @@ dopo il bootstrap. Obiettivo: infra comune per le mie app e palestra di architet
 
 - [Stack](#stack) · [Architettura](#architettura) · [Flusso di deploy](#flusso-di-deploy-gitops) · [Struttura](#struttura)
 - [Comandi quotidiani](#comandi-quotidiani) · [Bootstrap](#bootstrap-del-cluster-una-volta-sola) · [Nuova app](#aggiungere-una-nuova-app-il-pattern)
-- [Gateway LLM](#gateway-llm-litellm) · [Postgres](#postgres-condiviso-cloudnativepg) · [Qdrant](#qdrant-condiviso) · [Login Tailscale](#login-con-tailscale-tsidp) · [Notifiche](#notifiche-notify-hub) · [Zigbee e GPU](#zigbee-e-gpu-iot) · [Observability](#observability)
+- [Gateway LLM](#gateway-llm-litellm) · [Postgres](#postgres-condiviso-cloudnativepg) · [Qdrant](#qdrant-condiviso) · [Login Tailscale](#login-con-tailscale-tsidp) · [Mathesar](#dati-dei-database-mathesar) · [Notifiche](#notifiche-notify-hub) · [Zigbee e GPU](#zigbee-e-gpu-iot) · [Observability](#observability)
 - [Adattarlo al tuo setup](#adattarlo-al-tuo-setup) · [Roadmap](#fasi-future) · [Licenza](#licenza)
 
 ## Stack
@@ -546,6 +546,31 @@ Grafana come Viewer.
 
 tsidp è pre-1.0 e il formato dei grants può cambiare: l'immagine è pinnata e va
 aggiornata a mano, leggendo le release note.
+
+## Dati dei database (Mathesar)
+
+`platform/mathesar/manifests`, Application `mathesar` (wave 2):
+[Mathesar](https://mathesar.org) mostra i database di `pg-shared` come fogli di
+calcolo (filtri, ordinamenti, relazioni, query salvate) su
+`https://mathesar.<tailnet>.ts.net`.
+
+| | |
+|---|---|
+| Login | solo tsidp (`REQUIRE_SSO_LOGIN`); l'utente si abbina per email |
+| Accesso ai dati | ruolo `readonly` (`pg_read_all_data`): si legge tutto, non si scrive niente |
+| Dati interni | database `mathesar` su `pg-shared` (nel backup notturno); il namespace è senza stato |
+| Nei database delle app | schemi `msar`, `__msar`, `mathesar_types` (funzioni SQL di Mathesar); le tabelle in `public` non vengono toccate |
+
+**Prima installazione**: `make mathesar-secrets` (ruoli `mathesar` e `readonly`,
+`SECRET_KEY`); client su tsidp con redirect
+`https://mathesar.<tailnet>.ts.net/auth/oidc/tsidp/login/callback/` e
+`make oidc-client NAME=mathesar`; dopo il sync `make mathesar-connect`.
+
+**Un database nuovo** (un prodotto in più): dopo il suo `databases/<app>.yaml`,
+`make mathesar-connect` lo collega. Va rilanciato anche dopo ogni
+aggiornamento dell'immagine di Mathesar, che reinstalla le sue funzioni SQL
+col ruolo proprietario. Mathesar non conserva la password del proprietario:
+dentro resta solo quella di `readonly`.
 
 ## Notifiche (notify-hub)
 
