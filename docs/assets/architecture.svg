@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 660" width="1280" height="660" role="img" aria-label="Architecture: phones reach the single k3s node only over Tailscale; no port is open to the internet. ArgoCD pulls manifests from GitHub and images from GHCR. LiteLLM routes model calls to Anthropic or to Ollama on a GPU desktop, which a Zigbee smart plug powers on.">
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#ff2a2a" stroke-opacity="0.06" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#ff5c5c"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#2ee6a0"/>
+    </marker>
+    <style>
+      .mono { font-family: ui-monospace, SFMono-Regular, 'JetBrains Mono', Menlo, Consolas, monospace; }
+      .sans { font-family: ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; }
+      .label { font-size: 12px; letter-spacing: 3px; fill: #ff8080; }
+      .chip rect { fill: #160909; stroke: #5a1c1c; stroke-width: 1.5; }
+      .chip text { font-size: 15px; fill: #f2e6e6; }
+      .chip .sub { font-size: 11px; fill: #9a8585; }
+      .ext rect { fill: #0d0606; stroke: #3d1a1a; stroke-width: 1.5; }
+      .ext text { font-size: 15px; fill: #f2e6e6; }
+      .ext .sub { font-size: 11px; fill: #9a8585; }
+      .wire { stroke: #ff5c5c; stroke-width: 2; fill: none; }
+      .wire-label { font-size: 11px; fill: #c9a5a5; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="660" rx="16" fill="#080404"/>
+  <rect width="1280" height="660" rx="16" fill="url(#grid)"/>
+
+  <!-- ===== Left: who gets in, who does not ===== -->
+  <g class="ext mono">
+    <rect x="28" y="104" width="188" height="64" rx="8"/>
+    <text x="46" y="132">📱 iPhone · laptop</text>
+    <text x="46" y="152" class="sub">on the tailnet</text>
+  </g>
+  <path class="wire" d="M216 136H296" stroke="#2ee6a0" marker-end="url(#arrow-green)" style="stroke:#2ee6a0"/>
+  <text x="226" y="126" class="wire-label mono" font-size="10">WireGuard</text>
+
+  <g class="ext mono">
+    <rect x="28" y="430" width="188" height="64" rx="8" style="stroke:#5a1c1c;stroke-dasharray:5 5"/>
+    <text x="46" y="458">🌐 Internet</text>
+    <text x="46" y="478" class="sub">everyone else</text>
+  </g>
+  <path d="M216 462H290" stroke="#ff2a2a" stroke-width="2" stroke-dasharray="5 5"/>
+  <g transform="translate(256 462)" stroke="#ff2a2a" stroke-width="3" stroke-linecap="round">
+    <line x1="-8" y1="-8" x2="8" y2="8"/><line x1="-8" y1="8" x2="8" y2="-8"/>
+  </g>
+  <text x="46" y="520" class="wire-label mono" style="fill:#ff8080">0 ports open on the router</text>
+
+  <!-- ===== The node ===== -->
+  <rect x="300" y="44" width="680" height="580" rx="12" fill="#0f0606" stroke="#ff2a2a" stroke-width="2"/>
+  <text x="324" y="76" class="mono" font-size="15" letter-spacing="4" fill="#ff2a2a" font-weight="700">MINISFORUM UM790 · K3S SINGLE-NODE</text>
+
+  <!-- Ingress bar -->
+  <rect x="324" y="114" width="632" height="44" rx="6" fill="#0b1a14" stroke="#2ee6a0" stroke-opacity="0.6" stroke-width="1.5"/>
+  <text x="344" y="141" class="mono" font-size="14" fill="#bff5e0">Tailscale Operator · one ingress per app · Let's Encrypt *.ts.net</text>
+
+  <!-- Apps -->
+  <text x="324" y="192" class="mono label">APPS</text>
+  <g class="chip mono">
+    <rect x="324" y="204" width="148" height="40" rx="6"/><text x="340" y="229">trip-ai</text>
+    <rect x="485" y="204" width="148" height="40" rx="6"/><text x="501" y="229">tickup</text>
+    <rect x="646" y="204" width="148" height="40" rx="6" style="stroke:#ff2a2a"/><text x="662" y="229" style="fill:#ff5c5c">◉ ultron</text>
+    <rect x="807" y="204" width="148" height="40" rx="6"/><text x="823" y="229">alfred</text>
+    <rect x="324" y="254" width="148" height="40" rx="6"/><text x="340" y="279">interview</text>
+    <rect x="485" y="254" width="148" height="40" rx="6"/><text x="501" y="279">fiscoai</text>
+    <rect x="646" y="254" width="148" height="40" rx="6"/><text x="662" y="279">ordly</text>
+    <rect x="807" y="254" width="148" height="40" rx="6"/><text x="823" y="279">notify-hub</text>
+  </g>
+
+  <!-- Platform -->
+  <text x="324" y="332" class="mono label">PLATFORM</text>
+  <g class="chip mono">
+    <rect x="324" y="344" width="202" height="50" rx="6"/><text x="340" y="366">ArgoCD</text><text x="340" y="384" class="sub">app-of-apps · the only writer</text>
+    <rect x="539" y="344" width="202" height="50" rx="6"/><text x="555" y="366">Sealed Secrets</text><text x="555" y="384" class="sub">encrypted, committed</text>
+    <rect x="754" y="344" width="202" height="50" rx="6"/><text x="770" y="366">LiteLLM</text><text x="770" y="384" class="sub">virtual keys · budgets</text>
+    <rect x="324" y="404" width="202" height="50" rx="6"/><text x="340" y="426">pg-shared</text><text x="340" y="444" class="sub">CloudNativePG · nightly dumps</text>
+    <rect x="539" y="404" width="202" height="50" rx="6"/><text x="555" y="426">Qdrant</text><text x="555" y="444" class="sub">shared vector store</text>
+    <rect x="754" y="404" width="202" height="50" rx="6"/><text x="770" y="426">Observability</text><text x="770" y="444" class="sub">Prometheus · Loki · Grafana</text>
+  </g>
+
+  <!-- IoT -->
+  <text x="324" y="492" class="mono label">IOT</text>
+  <g class="chip mono">
+    <rect x="324" y="504" width="202" height="50" rx="6"/><text x="340" y="526">Zigbee2MQTT</text><text x="340" y="544" class="sub">USB dongle on the node</text>
+    <rect x="539" y="504" width="202" height="50" rx="6"/><text x="555" y="526">Mosquitto</text><text x="555" y="544" class="sub">MQTT, cluster-only</text>
+    <rect x="754" y="504" width="202" height="50" rx="6"/><text x="770" y="526">gpu-plug</text><text x="770" y="544" class="sub">make gpu-on / gpu-off</text>
+  </g>
+
+  <text x="324" y="598" class="mono" font-size="12" fill="#8a7676">Git is the only control knob · secrets never in plaintext · nothing applied by hand</text>
+
+  <!-- ===== Right: what the node talks to ===== -->
+  <g class="ext mono">
+    <rect x="1040" y="104" width="204" height="64" rx="8"/>
+    <text x="1060" y="132">GitHub</text>
+    <text x="1060" y="152" class="sub">this repo · source of truth</text>
+    <rect x="1040" y="196" width="204" height="64" rx="8"/>
+    <text x="1060" y="224">GHCR</text>
+    <text x="1060" y="244" class="sub">images tagged by commit</text>
+    <rect x="1040" y="344" width="204" height="64" rx="8"/>
+    <text x="1060" y="372">Anthropic API</text>
+    <text x="1060" y="392" class="sub">claude-* · via LiteLLM</text>
+    <rect x="1040" y="436" width="204" height="64" rx="8" style="stroke:#5a1c1c"/>
+    <text x="1060" y="464">pop-os · RTX 5080</text>
+    <text x="1060" y="484" class="sub">Ollama · over the tailnet</text>
+  </g>
+
+  <!-- ArgoCD pulls Git, kubelet pulls images -->
+  <path class="wire" d="M526 362H530V320H1010V136H1036" marker-end="url(#arrow)"/>
+  <text x="904" y="314" class="wire-label mono">sync (pull)</text>
+  <path class="wire" d="M980 228H1036" marker-end="url(#arrow)"/>
+  <text x="984" y="220" class="wire-label mono">pull</text>
+  <!-- LiteLLM out -->
+  <path class="wire" d="M956 369H1010V376H1036" marker-end="url(#arrow)"/>
+  <path class="wire" d="M956 381H1000V468H1036" marker-end="url(#arrow)"/>
+  <!-- The plug powers the GPU desktop -->
+  <path d="M956 529H1142V504" stroke="#ffc83d" stroke-width="2" stroke-dasharray="4 5" fill="none" marker-end="url(#arrow)"/>
+  <text x="1000" y="548" class="wire-label mono" style="fill:#ffc83d">⚡ power on demand</text>
+</svg>

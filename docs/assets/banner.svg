@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360" width="1280" height="360" role="img" aria-label="Homelab: one mini PC, Kubernetes, everything in Git. No open ports, no plaintext secrets, no kubectl apply after day one.">
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#ff2a2a" stroke-opacity="0.07" stroke-width="1"/>
+    </pattern>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ff2a2a" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#ff2a2a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vignette" cx="0.3" cy="0.5" r="0.9">
+      <stop offset="0" stop-color="#1c0707"/>
+      <stop offset="1" stop-color="#070303"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1280" height="360" rx="16" fill="url(#vignette)"/>
+  <rect width="1280" height="360" rx="16" fill="url(#grid)"/>
+
+  <g stroke="#ff2a2a" stroke-width="3" fill="none">
+    <path d="M24 60V24H60"/>
+    <path d="M1220 24H1256V60"/>
+    <path d="M24 300V336H60"/>
+    <path d="M1256 300V336H1220"/>
+  </g>
+
+  <!-- The node: a mini PC with a heptagon (Kubernetes wheel) on it -->
+  <g transform="translate(220 180)">
+    <circle r="150" fill="url(#glow)"/>
+    <rect x="-96" y="-96" width="192" height="192" rx="22" fill="#0b0404" stroke="#ff2a2a" stroke-width="3"/>
+    <rect x="-82" y="-82" width="164" height="164" rx="14" fill="none" stroke="#ff2a2a" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="6 7"/>
+    <polygon points="0,-52 40.7,-32.4 50.7,11.6 22.6,46.9 -22.6,46.9 -50.7,11.6 -40.7,-32.4" fill="none" stroke="#ff2a2a" stroke-width="5" stroke-linejoin="round"/>
+    <g stroke="#ff2a2a" stroke-width="4" stroke-linecap="round">
+      <line x1="0" y1="0" x2="0" y2="-34"/>
+      <line x1="0" y1="0" x2="26.6" y2="-21.2"/>
+      <line x1="0" y1="0" x2="33.1" y2="7.6"/>
+      <line x1="0" y1="0" x2="14.8" y2="30.6"/>
+      <line x1="0" y1="0" x2="-14.8" y2="30.6"/>
+      <line x1="0" y1="0" x2="-33.1" y2="7.6"/>
+      <line x1="0" y1="0" x2="-26.6" y2="-21.2"/>
+    </g>
+    <circle r="11" fill="#ff2a2a"/>
+    <circle cx="-70" cy="76" r="4" fill="#2ee6a0"/>
+    <circle cx="-56" cy="76" r="4" fill="#ff2a2a" opacity="0.7"/>
+  </g>
+
+  <g font-family="ui-monospace, SFMono-Regular, 'JetBrains Mono', Menlo, Consolas, monospace">
+    <text x="420" y="118" fill="#ff8080" font-size="15" letter-spacing="6">K3S · ARGOCD · TAILSCALE · SEALED SECRETS</text>
+    <text x="414" y="200" fill="#ff2a2a" font-size="84" font-weight="700" letter-spacing="22">HOMELAB</text>
+    <text x="420" y="248" fill="#f2e6e6" font-size="24" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">One mini PC. Kubernetes. Everything in Git.</text>
+    <text x="420" y="282" fill="#b8a3a3" font-size="24" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">No open ports. No plaintext secrets. No kubectl apply after day one.</text>
+  </g>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" letter-spacing="2">
+    <circle cx="1068" cy="316" r="4" fill="#2ee6a0"/>
+    <text x="1080" y="320" fill="#8a7676">SYNCED · HEALTHY</text>
+  </g>
+</svg>
