@@ -4,6 +4,8 @@ resources:
   - namespace.yaml
   - cluster.yaml
   - podmonitor.yaml
+  # Allerte (Prometheus → Alertmanager).
+  - alerts.yaml
   - backup.yaml
   # Un Database CR per app. Stanno nel namespace del Cluster, non in quello
   # dell'app: l'operator li cerca lì.

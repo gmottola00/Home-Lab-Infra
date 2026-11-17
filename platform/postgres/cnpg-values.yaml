@@ -12,3 +12,10 @@ resources:
 # PodMonitor del cluster, senza bisogno di label particolari.
 monitoring:
   podMonitorEnabled: true
+
+# Dashboard Grafana ufficiale di CloudNativePG (chart grafana-dashboards, come
+# dipendenza dell'operator): una ConfigMap con la label grafana_dashboard, che
+# la sidecar di Grafana carica da qualunque namespace. Il JSON pesa ~250 KB, al
+# limite dell'apply classico: sta qui perché cnpg-operator usa ServerSideApply.
+  grafanaDashboard:
+    create: true

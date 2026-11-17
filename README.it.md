@@ -449,6 +449,16 @@ pg_restore -h pg-shared-rw -U postgres -d <db> --clean --if-exists /backups/<dat
 LiteLLM resta per ora sul suo Postgres (`apps/litellm/postgres.yaml`); il
 trasloco su `pg-shared` è un passo successivo.
 
+### Monitoraggio di pg-shared
+
+- **Dashboard**: Grafana → Dashboards → *CloudNativePG* (stato, connessioni,
+  dimensione per database, transazioni, cache, lock, WAL). La crea il chart
+  dell'operator (`monitoring.grafanaDashboard.create` in `cnpg-values.yaml`).
+- **Allerte** (`manifests/alerts.yaml`): DB giù, disco oltre 80% e 92%,
+  connessioni oltre l'80% di `max_connections`, transazione aperta da più di
+  15 minuti, XID age, nessun backup riuscito da 26 ore. Visibili in Grafana →
+  Alerting → Alert rules.
+
 ## Qdrant condiviso
 
 `platform/qdrant/manifests`: un Qdrant per tutte le app RAG del lab, Application
