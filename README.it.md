@@ -504,7 +504,11 @@ proxy: il TLS arriva intatto a tsidp, quindi il certificato combacia.
      // Login: ogni membro raggiunge idp; solo gli admin gestiscono i client.
      { "src": ["autogroup:member"], "dst": ["tag:tsidp"], "ip": ["443"] },
      { "src": ["autogroup:admin"], "dst": ["tag:tsidp"],
-       "app": { "tailscale.com/cap/tsidp": [{ "allow_admin_ui": true, "allow_dcr": false }] } },
+       "app": { "tailscale.com/cap/tsidp": [{
+         "allow_admin_ui": true, "allow_dcr": false,
+         // Ruoli nei servizi (claim nel token e in /userinfo).
+         "extraClaims": { "grafana_role": "Admin" }, "includeInUserInfo": true
+       }] } },
      // Il proxy egress del cluster chiama token e JWKS.
      { "src": ["tag:k8s"], "dst": ["tag:tsidp"], "ip": ["443"] }
    ]
@@ -516,9 +520,19 @@ proxy: il TLS arriva intatto a tsidp, quindi il certificato combacia.
 3. `make tsidp-status`: pod Running, proxy egress pronto, e la discovery OIDC
    che risponde anche da dentro il cluster.
 
-**Aggiungere un servizio**: su `https://idp.<tailnet>.ts.net` → *Add New
-Client* con la redirect URI del servizio; client ID e secret sigillati nel
-secret del servizio; issuer `https://idp.<tailnet>.ts.net` nella sua config.
+**Aggiungere un servizio**: un caso in `scripts/oidc-client.sh` (namespace,
+secret, chiavi, redirect URI); su `https://idp.<tailnet>.ts.net` → *Add New
+Client* con quella redirect URI; `make oidc-client NAME=<servizio>` sigilla
+client ID e secret; issuer `https://idp.<tailnet>.ts.net` nella config del
+servizio.
+
+**Ruoli**: li decide la policy della tailnet, con `extraClaims` nel grant
+tsidp. Oggi `grafana_role: "Admin"` per gli admin; gli altri membri entrano in
+Grafana come Viewer.
+
+| Servizio | Login | Emergenza (tsidp giù) |
+|---|---|---|
+| Grafana | automatico (`auto_login`) | `/login?disableAutoLogin=true` + `make obs-pass` |
 
 tsidp è pre-1.0 e il formato dei grants può cambiare: l'immagine è pinnata e va
 aggiornata a mano, leggendo le release note.
