@@ -24,6 +24,8 @@ configMapGenerator:
       - ORDLY_PARSER_MODEL=claude-haiku-4-5
       - ORDLY_TIMEZONE=Europe/Rome
       - ORDLY_LOG_JSON=true
+      # OAuth client ID per «Accedi con Google» (non è un segreto).
+      - ORDLY_GOOGLE_CLIENT_ID=14273668248-3kpdbnnefu02slqdgm6huden54478o1d.apps.googleusercontent.com
 # CI (Ordly repo workflows) bumps newTag to the commit SHA on every push to
 # main; ArgoCD picks up the commit and rolls out. Do not edit newTag by hand.
 images:
