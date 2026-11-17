@@ -28,6 +28,6 @@ configMapGenerator:
 # main; ArgoCD picks up the commit and rolls out. Do not edit newTag by hand.
 images:
   - name: ghcr.io/gmottola00/ordly-backend
-    newTag: 772e051e7ef3f6df522ec88f0e5c2fdd0098285d
+    newTag: 76e3844b1b796ab1ebd8c9a2ed6556bfd6525644
   - name: ghcr.io/gmottola00/ordly-web
     newTag: 76e3844b1b796ab1ebd8c9a2ed6556bfd6525644
