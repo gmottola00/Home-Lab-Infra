@@ -1,0 +1,106 @@
+# Allerte di pg-shared. Le valuta Prometheus (seleziona le PrometheusRule di
+# tutti i namespace) e le passa ad Alertmanager; si vedono anche in Grafana
+# (Alerting → Alert rules, sorgente Prometheus).
+#
+# Poche e azionabili: ognuna vuol dire "c'è da fare qualcosa", non "è
+# interessante". Soglie pensate per un'istanza sola su local-path (20Gi).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pg-shared
+  namespace: databases
+spec:
+  groups:
+    - name: pg-shared
+      rules:
+        - alert: PgSharedDown
+          # absent: se il pod sparisce del tutto la metrica non c'è, e "== 0" tace.
+          expr: |
+            cnpg_collector_up{namespace="databases", pod=~"pg-shared-.*"} == 0
+            or absent(cnpg_collector_up{namespace="databases", pod=~"pg-shared-.*"})
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: Postgres pg-shared è giù
+            description: >-
+              Tutte le app su pg-shared (interview, alfred, notify, fiscoai, ordly)
+              sono senza database. make pg-status; kubectl -n databases logs pg-shared-1.
+
+        - alert: PgSharedDiskFilling
+          expr: |
+            kubelet_volume_stats_used_bytes{namespace="databases", persistentvolumeclaim=~"pg-shared-.*"}
+              / kubelet_volume_stats_capacity_bytes{namespace="databases", persistentvolumeclaim=~"pg-shared-.*"}
+            > 0.80
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Disco di pg-shared al {{ $value | humanizePercentage }}"
+            description: >-
+              Oltre il 95% Postgres si ferma in scrittura. Più spazio:
+              storage.size in platform/postgres/manifests/cluster.yaml (local-path
+              non ridimensiona da sé: vedi README), oppure pulizia dei dati.
+
+        - alert: PgSharedDiskAlmostFull
+          expr: |
+            kubelet_volume_stats_used_bytes{namespace="databases", persistentvolumeclaim=~"pg-shared-.*"}
+              / kubelet_volume_stats_capacity_bytes{namespace="databases", persistentvolumeclaim=~"pg-shared-.*"}
+            > 0.92
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Disco di pg-shared al {{ $value | humanizePercentage }}: quasi pieno"
+            description: Postgres sta per smettere di accettare scritture.
+
+        - alert: PgSharedConnectionsHigh
+          expr: |
+            sum(cnpg_backends_total{namespace="databases"})
+              / max(cnpg_pg_settings_setting{namespace="databases", name="max_connections"})
+            > 0.80
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Connessioni a pg-shared al {{ $value | humanizePercentage }} del massimo"
+            description: >-
+              Al 100% le app ricevono "too many clients". Di solito è un pool
+              troppo grande o una connessione che non viene chiusa: la dashboard
+              CloudNativePG mostra le connessioni per database.
+
+        - alert: PgSharedLongTransaction
+          # Una transazione aperta da molto blocca vacuum e può tenere lock.
+          expr: max by (datname, usename) (cnpg_backends_max_tx_duration_seconds{namespace="databases"}) > 900
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Transazione aperta da {{ $value | humanizeDuration }} su {{ $labels.datname }}"
+            description: >-
+              Ruolo {{ $labels.usename }}. Spesso è un'app ferma in "idle in
+              transaction". make pg-psql DB={{ $labels.datname }}, poi pg_stat_activity.
+
+        - alert: PgSharedXidAge
+          # Manutenzione: lontanissimo dal limite (2^31), ma va guardato prima.
+          expr: max by (datname) (cnpg_pg_database_xid_age{namespace="databases"}) > 1000000000
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "XID age alta su {{ $labels.datname }}"
+            description: Autovacuum non sta congelando le tuple; serve un VACUUM FREEZE.
+
+        - alert: PgBackupStale
+          # Il CronJob gira alle 03:00: 26h lasciano margine a un giro lento.
+          expr: |
+            time() - kube_cronjob_status_last_successful_time{namespace="databases", cronjob="pg-backup"}
+            > 26 * 3600
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Nessun backup di pg-shared riuscito da {{ $value | humanizeDuration }}"
+            description: >-
+              Il dump notturno non va a buon fine. make pg-backup lo rilancia e
+              ne mostra i log; make pg-backups elenca i dump presenti.
