@@ -82,6 +82,9 @@ grafana:
     userKey: admin-user
     passwordKey: admin-password
 
+  # Client OIDC di tsidp (vedi auth.generic_oauth sotto).
+  envFromSecret: grafana-oidc
+
   persistence:
     enabled: true
     storageClassName: local-path
@@ -92,6 +95,26 @@ grafana:
       # Il TLS termina sull'ingress Tailscale e Grafana parla HTTP: senza root_url
       # esplicito genera redirect e link assoluti sbagliati (http://localhost:3000).
       root_url: https://grafana.tail682dc3.ts.net
+    # Login automatico con l'identità Tailscale (tsidp, platform/tsidp): aprendo
+    # Grafana si entra direttamente. Client ID e secret arrivano come variabili
+    # GF_AUTH_GENERIC_OAUTH_* dal secret grafana-oidc (make oidc-client NAME=grafana).
+    # Emergenza (tsidp giù): /login?disableAutoLogin=true → admin locale.
+    auth.generic_oauth:
+      enabled: true
+      name: Tailscale
+      auto_login: true
+      allow_sign_up: true
+      use_pkce: true
+      scopes: openid email profile
+      auth_url: https://idp.tail682dc3.ts.net/authorize
+      token_url: https://idp.tail682dc3.ts.net/token
+      api_url: https://idp.tail682dc3.ts.net/userinfo
+      email_attribute_path: email
+      login_attribute_path: preferred_username
+      name_attribute_path: name
+      # Il ruolo lo decide la policy della tailnet: extraClaims del grant tsidp
+      # (grafana_role: Admin per gli admin). Tutti gli altri membri: Viewer.
+      role_attribute_path: grafana_role || 'Viewer'
 
   # Stesso pattern di apps/*/ingress.yaml: device tailnet "grafana" con cert Let's
   # Encrypt → https://grafana.tail682dc3.ts.net

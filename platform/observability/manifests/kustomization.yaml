@@ -8,3 +8,5 @@ resources:
   # Cifrato con kubeseal — committabile: solo il controller nel cluster lo decifra.
   # Rigenerabile con `make seal-grafana`.
   - grafana-admin-sealed-secret.yaml
+  # Client OIDC di tsidp per il login automatico (make oidc-client NAME=grafana).
+  - grafana-oidc-sealed-secret.yaml

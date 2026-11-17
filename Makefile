@@ -278,6 +278,10 @@ tsidp-status: ## Pod e volume di tsidp, proxy egress, e se il cluster raggiunge 
 	@kubectl run tsidp-check-$$$$ --rm -i --restart=Never -q --image=curlimages/curl:8.17.0 -- \
 		-sS --max-time 10 https://idp.tail682dc3.ts.net/.well-known/openid-configuration
 
+.PHONY: oidc-client
+oidc-client: ## Client OIDC di tsidp per NAME (es. grafana): ID e secret letti senza eco e sigillati
+	@scripts/oidc-client.sh $(NAME)
+
 ##@ Ordly
 
 .PHONY: ordly-tenant
